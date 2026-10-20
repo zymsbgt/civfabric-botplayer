@@ -53,7 +53,9 @@ public final class Progression {
         // ---- phase 2: a farm. The Grower makes it; everyone else sends it their seeds -------
         // the Grower always carries a hoe: CivFabric destroys any crop harvested without one
         add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1));
-        add("seeds", () -> !ClassPlan.isGrower(b()) || farmed() || seedKinds() >= 2 && seedCount() >= 12, Progression::seeds);
+        // seed for 3 crops that grow at the base: Realistic Plant Growth won't put the same crop back
+        // in the same soil for days, so a one-crop farm empties itself
+        add("seeds", () -> !ClassPlan.isGrower(b()) || seedKinds() >= 3 && seedCount() >= 12, Progression::seeds);
         add("farm", () -> !ClassPlan.isGrower(b()) || farmPlots(b()) >= FARM_PLOTS, b -> new LayFieldTask());
         add("share_seeds", () -> ClassPlan.isGrower(b()) || seedCount() == 0 || grower(b()) == null || teamFarm(b()) >= FARM_PLOTS,
                 b -> new GiveTask(grower(b), new ItemTarget("seeds", Progression::plantable, List.of(), seedCount())));
@@ -162,10 +164,24 @@ public final class Progression {
         return Inv.count(Progression::plantable);
     }
 
+    /** Different seeds we carry that will actually grow at our base's biome. */
     private static int seedKinds() {
         java.util.Set<Item> k = new java.util.HashSet<>();
-        for (int i = 0; i < 36; i++) if (plantable(Inv.inv().getItem(i))) k.add(Inv.inv().getItem(i).getItem());
+        for (int i = 0; i < 36; i++) {
+            ItemStack st = Inv.inv().getItem(i);
+            if (plantable(st) && growsAtBase(b(), ((BlockItem) st.getItem()).getBlock())) k.add(st.getItem());
+        }
         return k.size();
+    }
+
+    /** Realistic Plant Growth lets this crop grow at our base (or here, without one). */
+    static boolean growsAtBase(Bot bot, net.minecraft.world.level.block.Block crop) {
+        if (!lol.zym.zymbot.farm.PlantRules.active()) return true;
+        var pr = lol.zym.zymbot.farm.PlantRules.get();
+        if (!pr.governs(crop)) return true;
+        BlockPos at = ClassPlan.teamHome(bot);
+        if (at == null) at = bot.player().blockPosition();
+        return pr.judge(crop, at.above()).grows();
     }
 
     /**
@@ -174,12 +190,16 @@ public final class Progression {
      * grass (wheat seeds). Wild crops first: they're food too.
      */
     private static Task seeds(Bot bot) {
+        // wild crops whose seed grows at the base and that we don't carry yet
         List<net.minecraft.world.level.block.Block> wild = new ArrayList<>();
         for (var b : net.minecraft.core.registries.BuiltInRegistries.BLOCK) {
             String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).getPath();
-            if (id.startsWith("wild_") && bot.seenNearby(b)) wild.add(b);
+            if (!id.startsWith("wild_")) continue;
+            boolean useful = lol.zym.zymbot.craft.Sources.lootOf(b).stream().anyMatch(d -> d instanceof BlockItem bi
+                    && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock && growsAtBase(bot, bi.getBlock()) && Inv.count(d) == 0);
+            if (useful && (bot.seenNearby(b) || lol.zym.zymbot.memory.Landmarks.nearest(bot, ("wild:" + id.substring(5))::equals, 120) != null)) wild.add(b);
         }
-        if (!wild.isEmpty()) return new GatherTask(wild, Progression::plantable, seedCount() + 6);
+        if (!wild.isEmpty()) return new GatherTask(wild, Progression::plantable, seedCount() + 4);
         return new GatherTask(List.of(net.minecraft.world.level.block.Blocks.SHORT_GRASS, net.minecraft.world.level.block.Blocks.TALL_GRASS),
                 Progression::plantable, seedCount() + 6);
     }
@@ -289,19 +309,15 @@ public final class Progression {
         return null;
     }
 
+    /** Cook the raw meat we're carrying: exactly what's there (never hunt for more to make up a count). */
     private static Task cook(Item raw) {
-        Item cooked = switch (raw == null ? "" : Inv.id(raw)) {
-            case "minecraft:beef" -> Items.COOKED_BEEF;
-            case "minecraft:porkchop" -> Items.COOKED_PORKCHOP;
-            case "minecraft:mutton" -> Items.COOKED_MUTTON;
-            case "minecraft:chicken" -> Items.COOKED_CHICKEN;
-            case "minecraft:rabbit" -> Items.COOKED_RABBIT;
-            case "minecraft:cod" -> Items.COOKED_COD;
-            case "minecraft:salmon" -> Items.COOKED_SALMON;
-            default -> null;
-        };
-        if (cooked == null) return null;
-        return new ObtainTask(ItemTarget.of(cooked, Inv.count(cooked) + Inv.count(raw)));
+        if (raw == null) return null;
+        int n = Inv.count(raw);
+        if (n == 0) return null;
+        for (var r : b().level().getRecipeManager().getAllRecipesFor(net.minecraft.world.item.crafting.RecipeType.SMELTING)) {
+            if (r.value().getIngredients().get(0).test(new ItemStack(raw))) return new SmeltTask(r, n);
+        }
+        return null;
     }
 
     /**

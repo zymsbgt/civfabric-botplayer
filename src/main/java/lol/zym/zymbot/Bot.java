@@ -371,6 +371,16 @@ public final class Bot {
             lastActionKey = null;
             return;
         }
+        // CivFabric tells us how warm our bed is when we lie in it: believe it over our memory
+        if (text.contains("This bed feels")) {
+            boolean warm = text.contains("warm") || text.contains("cozy") || text.contains("cosy");
+            if (memory.bedWarm != warm) {
+                memory.bedWarm = warm;
+                memory.save();
+                event(warm ? "bed is warm: resting will heal" : "bed is cold (\"" + text.replace("[CivLabs] » ", "").trim()
+                        + "\"): needs a campfire within 4 blocks");
+            }
+        }
         if (civ.onMessage(memory, text, null)) return;
         if (pacifism.onMessage(text)) return;
         if (text.contains("You're knocked out")) {
@@ -437,6 +447,9 @@ public final class Bot {
     public boolean nearSomeoneElsesBuild(BlockPos pos) {
         int buffer = BotConfig.get().builtAreaBuffer;
         if (memory.home != null && memory.home.pos().closerThan(pos, 24)) return false;
+        // the team's base is ours too
+        BlockPos base = lol.zym.zymbot.brain.ClassPlan.teamHome(this);
+        if (base != null && base.closerThan(pos, 32)) return false;
         for (BotMemory.Station s : memory.stations) if (s.ours && s.at.pos().closerThan(pos, buffer + 2)) return false;
         return WorldView.nearBuilt(pos, buffer);
     }

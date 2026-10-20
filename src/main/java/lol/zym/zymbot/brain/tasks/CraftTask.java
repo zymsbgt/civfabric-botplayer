@@ -216,6 +216,16 @@ public class CraftTask extends Task {
             }
             bot.memory().removeStation(p);
         }
+        // a table standing right here at our own base (a teammate's): use it rather than place another
+        for (BlockPos p : BlockPos.betweenClosed(me.offset(-4, -2, -4), me.offset(4, 2, 4))) {
+            if (WorldView.state(p).getBlock() instanceof CraftingTableBlock && !bot.nearSomeoneElsesBuild(p)) {
+                tablePos = p.immutable();
+                bot.memory().addStation("crafting_table", tablePos, bot.dim(), false);
+                phase = Phase.OPEN;
+                ticks = 0;
+                return Status.RUNNING;
+            }
+        }
         if (!Inv.has(Items.CRAFTING_TABLE)) {
             // ours, just broken back up and still lying on the ground: fetch it. (Not someone
             // else's standing table: Visual Workbench keeps their items in its grid.)
@@ -238,6 +248,8 @@ public class CraftTask extends Task {
             phase = Phase.OPEN;
             ticks = 0;
             wait = 3;
+        } else if (ticks > 20 * 20) {
+            return fail("couldn't place a crafting table here");
         }
         return Status.RUNNING;
     }

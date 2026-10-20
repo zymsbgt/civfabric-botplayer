@@ -145,6 +145,9 @@ public class EatTask extends Task {
         Controls.use(true);
         // done when a piece is gone (a much-repeated food may restore almost nothing)
         boolean ate = Inv.count(Inv.held().getItem()) < startCount || p.getFoodData().getFoodLevel() > startFood;
+        // some modded foods take longer than the vanilla time Spice of Fabric scales: if we're
+        // still chewing, keep going rather than drop it and start over
+        if (!ate && ticks > limit && p.isUsingItem() && ticks < limit * 3) return Status.RUNNING;
         if (ate || ticks > limit) {
             Controls.use(false);
             if (!ate) {

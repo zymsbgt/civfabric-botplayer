@@ -32,6 +32,9 @@ public class HuntTask extends Task {
     private int explores;
     private final Set<Integer> skipped = new HashSet<>();
     private boolean pokemon;
+    private LivingEntity lastPrey;
+    private float lastPreyHealth;
+    private int lastHitTick;
     /** Species that hit back lately (Combee, Taillow...): not prey again for half an hour. */
     private static final java.util.Map<String, Long> FIGHTERS = new java.util.HashMap<>();
 
@@ -127,6 +130,20 @@ public class HuntTask extends Task {
             bot.event(prey.getName().getString() + " fights back; leaving its kind alone for a while");
             prey = null;
             lol.zym.zymbot.nav.Nav.stop();
+            return Status.RUNNING;
+        }
+        // out of reach (a flying Combee, something across water): no damage in 30 s means give up on it
+        if (prey != lastPrey) {
+            lastPrey = prey;
+            lastPreyHealth = prey.getHealth();
+            lastHitTick = ticks;
+        } else if (prey.getHealth() < lastPreyHealth) {
+            lastPreyHealth = prey.getHealth();
+            lastHitTick = ticks;
+        } else if (ticks - lastHitTick > 20 * 30) {
+            skipped.add(prey.getId());
+            bot.event("can't get at that " + prey.getName().getString() + "; trying another");
+            prey = null;
             return Status.RUNNING;
         }
         FightTask.engage(bot, prey);

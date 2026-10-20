@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "tell",
-            "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave");
+            "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -245,6 +245,17 @@ public final class Commands {
                         return "removed base " + a[2];
                     }
                     return "teamhome | teamhome set <name> [x y z] [purpose] | teamhome assign <name> | teamhome remove <name>";
+                }
+                case "drops" -> {
+                    // what's lying about within 16 blocks, and whether it's in water
+                    var me = bot.player();
+                    var items = bot.level().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, me.getBoundingBox().inflate(16));
+                    if (items.isEmpty()) return "no drops within 16 blocks";
+                    StringBuilder sb = new StringBuilder(items.size() + " drops: ");
+                    for (var e : items.stream().limit(20).toList())
+                        sb.append(e.getItem().getCount()).append(" ").append(Inv.id(e.getItem().getItem()).replace("minecraft:", ""))
+                                .append(" @").append(e.blockPosition().toShortString()).append(e.isInWater() ? " (water)" : "").append(" | ");
+                    return sb.toString();
                 }
                 case "grave" -> {
                     // point the bot at a grave of its own to empty (one forgotten before graves were saved)
