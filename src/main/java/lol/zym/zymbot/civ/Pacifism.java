@@ -42,9 +42,17 @@ public final class Pacifism {
         return state;
     }
 
+    private long askedNight = -1;
+
     /** Ask the server once we're settled in; a missing command means the mod isn't there. */
     public void tick(Bot bot) {
         long t = bot.ticks();
+        // and again each nightfall: a blood moon announced before we joined, or missed, still counts
+        long day = bot.level().getDayTime();
+        if (state == State.ON && day % 24000 >= 12600 && day % 24000 < 13600 && askedNight != day / 24000 && t > 200) {
+            askedNight = day / 24000;
+            bot.player().connection.sendCommand("pacifist status");
+        }
         if (state == State.UNKNOWN && t > 100 && asks < 3 && (askedAt < 0 || t - askedAt > 1200)) {
             askedAt = t;
             asks++;
@@ -126,6 +134,12 @@ public final class Pacifism {
     /** Fighting this one would anger its whole kin (it isn't already hostile to us). */
     public boolean fightingCosts(Entity e) {
         return atPeaceWith(e);
+    }
+
+    /** A blood moon is up: nothing is at peace with anyone until dawn. */
+    public boolean bloodMoon() {
+        protecting(); // drops the moon once it's day
+        return bloodMoon;
     }
 
     /** Pacifism is on and in force: not suspended by a blood moon or a village at night. */

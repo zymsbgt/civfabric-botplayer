@@ -35,13 +35,15 @@ public final class Progression {
                         b().player().blockPosition(), b().dim(), 24)
                 .filter(st -> lol.zym.zymbot.world.WorldView.state(st.at.pos()).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE))
                 .isPresent(), b -> obtain(Items.CRAFTING_TABLE, 1));
+        // a sword before any long walk (rejoining the team, a grave): a spider pack killed an unarmed bot
+        // in seconds, and a Pokémon that fights back has to be finished. Worth the 3 food it costs (a
+        // pickaxe doesn't count, though it hits a little harder than a fist)
+        add("wooden_sword", Inv::armed, b -> obtain(Items.WOODEN_SWORD, 1));
         // stay with the team: a bot that wandered (or respawned) far from the base walks back first
         add("rejoin", () -> {
             BlockPos t = ClassPlan.teamHome(b());
             return t == null || t.closerThan(b().player().blockPosition(), 100);
         }, b -> new GoToTask(ClassPlan.teamHome(b), 12));
-        // hunting with fists takes forever; a wooden sword (or any weapon) is worth the 3 food it costs
-        add("wooden_sword", () -> Inv.bestWeapon() >= 0, b -> obtain(Items.WOODEN_SWORD, 1));
         // Spice of Fabric: a stack of one food is worth little, so "enough" means value and variety
         add("food_stock", Progression::stocked, Progression::food);
         add("wooden_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 0, b -> obtain(Items.WOODEN_PICKAXE, 1));

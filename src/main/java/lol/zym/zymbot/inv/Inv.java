@@ -217,6 +217,11 @@ public final class Inv {
         return best;
     }
 
+    /** A sword or an axe: a pickaxe swings, but it's no way to take on something that hits back. */
+    public static boolean armed() {
+        return find(s -> s.getItem() instanceof SwordItem || s.getItem() instanceof AxeItem) >= 0;
+    }
+
     /** Tool tier rank for comparing "do I already have something at least this good". */
     public static int tier(ItemStack s) {
         if (!(s.getItem() instanceof TieredItem t)) return -1;

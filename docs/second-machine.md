@@ -2,10 +2,10 @@
 
 Bots on any machine on the LAN join the same team through the hub running on the main Mac.
 
-- **Hub:** `http://192.168.8.163:25599`.
+- **Hub:** `http://192.168.0.3:25599`.
 - **Token:** in `hub/hub-token.txt` on the main Mac. It isn't committed. Connections from the Mac
   itself need no token; every other machine does.
-- **Server:** `192.168.8.167:25565`.
+- **Server:** `192.168.0.19:25565`.
 
 ## 1. Copy the bot instance over
 
@@ -22,7 +22,7 @@ clients can't share an instance.
 Edit `minecraft/config/zymbot.json` in each copy:
 
 ```json
-"hubUrl": "http://192.168.8.163:25599",
+"hubUrl": "http://192.168.0.3:25599",
 "hubToken": "<the token from hub/hub-token.txt>",
 "autoStart": false
 ```
@@ -37,11 +37,11 @@ names: two clients with the same name kick each other off.
 
 ## 4. Launch
 
-Launch each instance with its own account, and join `192.168.8.167:25565` (the server is offline
+Launch each instance with its own account, and join `192.168.0.19:25565` (the server is offline
 mode). From a terminal you can do it in one go (Windows path shown):
 
 ```
-"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.8.167:25565 -a Bot3
+"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.0.19:25565 -a Bot3
 ```
 
 A second launch while Prism is running is forwarded to that same Prism process, which ignores `-a`.
@@ -56,7 +56,7 @@ Scholar).
 
 ## If they can't reach the hub
 
-- From the second machine, open `http://192.168.8.163:25599/leaders?server=x` in a browser. Without
+- From the second machine, open `http://192.168.0.3:25599/leaders?server=x` in a browser. Without
   the token it should say `unauthorized`; if it doesn't load at all, the Mac's firewall is blocking
   port 25599. Allow `node` under System Settings → Network → Firewall → Options.
-- The client log shows `Team hub http://192.168.8.163:25599 (server ...)` once it's connected.
+- The client log shows `Team hub http://192.168.0.3:25599 (server ...)` once it's connected.

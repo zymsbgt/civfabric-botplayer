@@ -28,12 +28,15 @@ public final class PokemonFood {
     /** Everything each species drops (wool, coal, string...), not just food. */
     private static Map<String, Set<Item>> allBySpecies;
     private static Set<Item> anyDrop;
+    /** Species with willDefendSelf: hit one and it stays angry at us until one of us dies. */
+    private static Set<String> fightsBack;
 
     private static synchronized void load() {
         if (bySpecies != null) return;
         bySpecies = new HashMap<>();
         allBySpecies = new HashMap<>();
         anyDrop = new HashSet<>();
+        fightsBack = new HashSet<>();
         FabricLoader.getInstance().getModContainer("cobblemon").ifPresent(c -> {
             for (Path root : c.getRootPaths()) {
                 Path dir = root.resolve("data/cobblemon/species");
@@ -45,13 +48,19 @@ public final class PokemonFood {
                 }
             }
         });
-        ZymBotMod.LOG.info("Pokémon food: {} species drop something edible", bySpecies.size());
+        ZymBotMod.LOG.info("Pokémon food: {} species drop something edible; {} species fight back", bySpecies.size(), fightsBack.size());
     }
 
     private static void read(Path f) {
         try {
             JsonObject o = JsonParser.parseString(Files.readString(f)).getAsJsonObject();
-            if (!o.has("name") || !o.has("drops")) return;
+            if (!o.has("name")) return;
+            String name = o.get("name").getAsString().toLowerCase(Locale.ROOT);
+            if (o.has("behaviour") && o.getAsJsonObject("behaviour").has("combat")) {
+                JsonObject combat = o.getAsJsonObject("behaviour").getAsJsonObject("combat");
+                if (combat.has("willDefendSelf") && combat.get("willDefendSelf").getAsBoolean()) fightsBack.add(name);
+            }
+            if (!o.has("drops")) return;
             JsonObject drops = o.getAsJsonObject("drops");
             if (!drops.has("entries")) return;
             Set<Item> food = new HashSet<>(), all = new HashSet<>();
@@ -65,7 +74,6 @@ public final class PokemonFood {
                 all.add(it);
                 if (it.components().has(DataComponents.FOOD)) food.add(it);
             }
-            String name = o.get("name").getAsString().toLowerCase(Locale.ROOT);
             if (!food.isEmpty()) bySpecies.put(name, food);
             if (!all.isEmpty()) allBySpecies.put(name, all);
             anyDrop.addAll(all);
@@ -94,6 +102,16 @@ public final class PokemonFood {
         for (Item it : allBySpecies.getOrDefault(e.getName().getString().toLowerCase(Locale.ROOT), Set.of()))
             if (match.test(new net.minecraft.world.item.ItemStack(it))) return true;
         return false;
+    }
+
+    /**
+     * A species that retaliates (Combee, Taillow...). Cobblemon's anger at an attacker never
+     * wears off: it chases until the attacker or it is dead, so running away doesn't end it.
+     */
+    public static boolean fightsBack(Entity e) {
+        if (!CatchPokemonTask.isPokemon(e)) return false;
+        load();
+        return fightsBack.contains(e.getName().getString().toLowerCase(Locale.ROOT));
     }
 
     /** A wild Pokémon worth hunting for food. */

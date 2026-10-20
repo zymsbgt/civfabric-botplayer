@@ -104,7 +104,11 @@ public final class BotMemory {
     public String homeName;
     public Pos bed;
     public List<Pos> deaths = new ArrayList<>();
-    /** Our grave still to be emptied: survives a restart, so the items aren't forgotten. */
+    /** Pokémon species (lower case) that have hurt us, mapped to when: they're not easy prey. */
+    public Map<String, Long> fighters = new HashMap<>();
+    /** Our graves still to be emptied, oldest first: they survive a restart and a second death. */
+    public List<Pos> graves = new ArrayList<>();
+    /** The single grave older memories kept; moved into {@link #graves} on load. */
     public Pos grave;
     public List<Station> stations = new ArrayList<>();
     /** Block positions not to touch again (reinforced, unreachable), mapped to expiry millis. */
@@ -148,6 +152,11 @@ public final class BotMemory {
         }
         if (m == null) m = new BotMemory();
         m.file = f;
+        if (m.graves == null) m.graves = new ArrayList<>();
+        if (m.grave != null) {
+            m.graves.add(m.grave);
+            m.grave = null;
+        }
         long now = System.currentTimeMillis();
         m.blacklist.values().removeIf(exp -> exp < now);
         return m;
@@ -172,7 +181,8 @@ public final class BotMemory {
         Minecraft mc = Minecraft.getInstance();
         String key;
         ServerData sd = mc.getCurrentServer();
-        if (sd != null) key = sd.ip;
+        // "host" and "host:25565" are the same server: one key, so bots joined either way share memory and the hub
+        if (sd != null) key = sd.ip.contains(":") || sd.ip.startsWith("[") ? sd.ip : sd.ip + ":25565";
         else if (mc.getSingleplayerServer() != null) key = "sp:" + mc.getSingleplayerServer().getWorldData().getLevelName();
         else key = "unknown";
         try {

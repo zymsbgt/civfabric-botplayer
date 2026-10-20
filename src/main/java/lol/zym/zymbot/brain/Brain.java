@@ -364,7 +364,7 @@ public final class Brain {
             case "air" -> 6;
             case "flee" -> 5;
             case "fight" -> 4;
-            case "eat", "shore" -> 3;
+            case "eat", "shore", "shelter" -> 3;
             case "unstuck", "grave", "receive", "forage" -> 2;
             case "sleep", "treat" -> 1;
             default -> 0;
@@ -379,12 +379,12 @@ public final class Brain {
                 .min(Comparator.comparingDouble(o -> o.getHealth())).orElse(null);
     }
 
-    /** A Pokémon that hurt us in the last 10 s and is still close. */
+    /** A Pokémon that hurt us in the last minute and is still close (fliers hit, back off, come again). */
     private LivingEntity angryPokemon(Bot bot) {
-        if (bot.ticks() - bot.lastHurtTick > 200 || bot.lastAttackerId < 0) return null;
+        if (bot.ticks() - bot.lastHurtTick > 1200 || bot.lastAttackerId < 0) return null;
         var e = bot.level().getEntity(bot.lastAttackerId);
         if (!(e instanceof LivingEntity le) || !le.isAlive() || !CatchPokemonTask.isPokemon(le)) return null;
-        return le.distanceTo(bot.player()) < 16 ? le : null;
+        return le.distanceTo(bot.player()) < 24 ? le : null;
     }
 
     private LivingEntity threat(Bot bot) {
@@ -405,9 +405,11 @@ public final class Brain {
         // diving for our own grave needs the breath: surface at a third, not at four fifths
         double airFloor = "grave".equals(reflexKind) ? 0.35 : 0.8;
         if (p.isUnderWater() && p.getAirSupply() < p.getMaxAirSupply() * airFloor) return "air";
-        // a wild Pokémon that has turned on us keeps coming (a Taillow hits for 6): run, don't stand there
+        // a wild Pokémon that has turned on us stays angry until one of us dies (Cobblemon's anger
+        // never wears off), and fliers keep up with a sprint: running only spreads the hits out. Fight
+        // it. Someone's own Pokémon defending its owner is different: back off from that one.
         LivingEntity mon = angryPokemon(bot);
-        if (mon != null) return "flee";
+        if (mon != null) return CatchPokemonTask.wild(mon) ? "fight" : "flee";
         LivingEntity t = threat(bot);
         if (t != null) {
             boolean weak = p.getHealth() <= bot.health().fleeAt(bot);
@@ -431,11 +433,15 @@ public final class Brain {
         boolean hurtForGood = bot.health().hurt(bot) && !bot.health().naturalRegen(bot);
         if ((!wet || food <= 3) && (food <= 14 || food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0) return "eat";
         if (!wet && hurtForGood && EatTask.chooseHealing(bot) >= 0) return "eat";
+        // a blood moon: every mob is after us until dawn. Go home and dig in, ahead of foraging,
+        // graves and errands (all of which mean walking about in the dark)
+        if (bot.pacifism().bloodMoon() && !wet) return "shelter";
         // hungry with nothing to eat: go and get food before anything else (CivFabric won't
         // even let us craft below 4)
         if (!wet && food <= 6 && EatTask.choose(bot) < 0 && System.currentTimeMillis() > noForageUntil) return "forage";
         if (bot.stuck() && System.currentTimeMillis() > noUnstuckUntil) return "unstuck";
-        if (bot.pendingGrave() != null) return "grave";
+        // a grave trip is a long walk: not unarmed (unless it's close), the progression makes a sword first
+        if (bot.pendingGrave() != null && (Inv.armed() || bot.pendingGrave().closerThan(p.blockPosition(), 48))) return "grave";
         if (bot.receiving()) return "receive";
         if (System.currentTimeMillis() > noTreatUntil && TreatTask.treatmentSlot() >= 0) {
             patient = hurtTeammate(bot);
@@ -459,9 +465,20 @@ public final class Brain {
                 Player pl = bot.nearestOtherPlayer(8);
                 yield new FleeTask(t != null ? t : pl != null ? pl : bot.player(), 16);
             }
-            case "fight" -> new FightTask(threat(bot));
+            case "fight" -> {
+                LivingEntity mon = angryPokemon(bot);
+                if (mon != null) {
+                    bot.event("fighting back against " + mon.getName().getString() + " (it won't stop chasing)");
+                    yield new FightTask(mon);
+                }
+                yield new FightTask(threat(bot));
+            }
             case "eat" -> new EatTask();
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
+            case "shelter" -> {
+                bot.event("blood moon: heading home to dig in until dawn");
+                yield new ShelterTask();
+            }
             case "air" -> {
                 bot.event("out of air; climbing out");
                 // a grave too deep to reach on one breath: after a few tries, leave it

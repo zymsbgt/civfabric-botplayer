@@ -258,11 +258,15 @@ public final class Commands {
                     return sb.toString();
                 }
                 case "grave" -> {
-                    // point the bot at a grave of its own to empty (one forgotten before graves were saved)
-                    if (a.length < 4) return bot.memory().grave == null ? "no grave to recover" : "grave at " + bot.memory().grave.pos().toShortString();
-                    bot.memory().grave = new BotMemory.Pos(new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])), bot.dim());
-                    bot.memory().save();
-                    return "will recover the grave at " + a[1] + " " + a[2] + " " + a[3];
+                    // point the bot at a grave of its own to empty (one it forgot), or list the ones it knows
+                    if (a.length < 4) {
+                        if (bot.memory().graves.isEmpty()) return "no graves to recover";
+                        StringBuilder sb = new StringBuilder("graves: ");
+                        for (var g : bot.memory().graves) sb.append(g.pos().toShortString()).append(" | ");
+                        return sb.toString();
+                    }
+                    bot.addGrave(new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])));
+                    return "will recover the grave at " + a[1] + " " + a[2] + " " + a[3] + " (" + bot.memory().graves.size() + " known)";
                 }
                 case "mark" -> {
                     if (a.length < 2) return "mark <name>: remember this spot by name";

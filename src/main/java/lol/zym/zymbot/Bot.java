@@ -190,6 +190,11 @@ public final class Bot {
             lastAttackerId = src != null && src.getEntity() != null ? src.getEntity().getId() : -1;
             lastHurtTick = tick;
             event(String.format("hurt %.1f by %s, health %.1f", lastHealth - h, what, h));
+            // a wild Pokémon that hits us stays angry until one of us dies: remember its kind
+            if (src != null && src.getEntity() != null && lol.zym.zymbot.brain.tasks.CatchPokemonTask.isPokemon(src.getEntity())) {
+                memory.fighters.put(src.getEntity().getName().getString().toLowerCase(java.util.Locale.ROOT), System.currentTimeMillis());
+                memory.save();
+            }
         }
         lastHealth = h;
     }
@@ -458,15 +463,30 @@ public final class Bot {
         return surveyed.contains(b);
     }
 
+    /** The nearest of our graves in this dimension still to empty (they're kept across restarts). */
     public BlockPos pendingGrave() {
-        // remembered from before a restart
-        if (pendingGrave == null && memory.grave != null && memory.grave.dim.equals(dim())) pendingGrave = memory.grave.pos();
+        if (pendingGrave == null) {
+            BlockPos me = player().blockPosition();
+            pendingGrave = memory.graves.stream().filter(g -> g.dim.equals(dim())).map(BotMemory.Pos::pos)
+                    .min(java.util.Comparator.comparingDouble(g -> g.distSqr(me))).orElse(null);
+        }
         return pendingGrave;
     }
 
+    /** Done with (or giving up on) the grave we were after; any others stay. */
     public void clearPendingGrave() {
+        if (pendingGrave != null) {
+            BlockPos done = pendingGrave;
+            memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().equals(done));
+        }
         pendingGrave = null;
-        memory.grave = null;
+        memory.save();
+    }
+
+    public void addGrave(BlockPos at) {
+        memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().equals(at));
+        memory.graves.add(new BotMemory.Pos(at, dim()));
+        pendingGrave = null; // pick the nearest again
         memory.save();
     }
 
@@ -548,8 +568,7 @@ public final class Bot {
         event("died at " + at.toShortString());
         brain.stopAll(this);
         Controls.releaseAll();
-        pendingGrave = at;
-        memory.grave = new BotMemory.Pos(at, dim());
+        addGrave(at);
         downedSince = null;
     }
 

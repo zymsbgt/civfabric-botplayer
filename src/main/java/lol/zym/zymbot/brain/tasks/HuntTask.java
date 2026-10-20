@@ -35,11 +35,20 @@ public class HuntTask extends Task {
     private LivingEntity lastPrey;
     private float lastPreyHealth;
     private int lastHitTick;
-    /** Species that hit back lately (Combee, Taillow...): not prey again for half an hour. */
-    private static final java.util.Map<String, Long> FIGHTERS = new java.util.HashMap<>();
+    /**
+     * A Pokémon that hits back: its species defends itself in Cobblemon's data, or one has hurt us
+     * before (remembered across restarts). Once hit it chases us until one of us is dead.
+     */
+    public static boolean fighter(Bot bot, LivingEntity e) {
+        return lol.zym.zymbot.inv.PokemonFood.fightsBack(e)
+                || bot.memory().fighters.containsKey(e.getName().getString().toLowerCase(java.util.Locale.ROOT));
+    }
 
-    private static boolean fighter(LivingEntity e) {
-        return FIGHTERS.getOrDefault(e.getName().getString(), 0L) > System.currentTimeMillis();
+    /** Worth picking a fight with: a fighter only with a sword or axe, near-full health, and no bigger than us. */
+    private static boolean mayHunt(Bot bot, LivingEntity e) {
+        float hp = bot.player().getHealth();
+        if (!fighter(bot, e)) return hp > 12;
+        return Inv.armed() && hp >= 16 && !bot.health().fragile(bot) && e.getMaxHealth() <= hp;
     }
     /** Hunt wild Pokémon whose drops match this too (wool from Mareep, string from Spinarak). */
     private java.util.function.Predicate<ItemStack> pokemonFor;
@@ -98,7 +107,7 @@ public class HuntTask extends Task {
                 return Status.RUNNING;
             }
             prey = bot.level().getEntitiesOfClass(LivingEntity.class, new AABB(bot.player().blockPosition()).inflate(48),
-                            e -> (types.contains(e.getType()) || bot.player().getHealth() > 12 && !fighter(e) && (pokemon && lol.zym.zymbot.inv.PokemonFood.edible(e)
+                            e -> (types.contains(e.getType()) || mayHunt(bot, e) && (pokemon && lol.zym.zymbot.inv.PokemonFood.edible(e)
                                     || pokemonFor != null && lol.zym.zymbot.inv.PokemonFood.drops(e, pokemonFor)))
                                     && e.isAlive() && !skipped.contains(e.getId())
                                     && !WorldView.deepWater(e.blockPosition()))
@@ -123,15 +132,8 @@ public class HuntTask extends Task {
                 return Status.RUNNING;
             }
         }
-        // a Pokémon that hits back isn't worth the health (none comes back on its own here)
-        if (CatchPokemonTask.isPokemon(prey) && bot.lastAttackerId == prey.getId() && bot.ticks() - bot.lastHurtTick < 40) {
-            skipped.add(prey.getId());
-            FIGHTERS.put(prey.getName().getString(), System.currentTimeMillis() + 30 * 60_000L);
-            bot.event(prey.getName().getString() + " fights back; leaving its kind alone for a while");
-            prey = null;
-            lol.zym.zymbot.nav.Nav.stop();
-            return Status.RUNNING;
-        }
+        // a Pokémon that hits back stays angry until one of us is dead: walking off doesn't end it,
+        // so finish it (the brain's fight reflex takes over; its kind is remembered as a fighter)
         // out of reach (a flying Combee, something across water): no damage in 30 s means give up on it
         if (prey != lastPrey) {
             lastPrey = prey;
