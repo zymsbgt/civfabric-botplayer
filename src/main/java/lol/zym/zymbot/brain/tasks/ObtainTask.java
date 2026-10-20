@@ -151,6 +151,13 @@ public class ObtainTask extends Task {
         int haveIn = Inv.count(in::test);
         if (haveIn < missing) return sub(ItemTarget.of(in, missing));
         if (!Inv.has(Items.FURNACE) && !bot.hasStationNearby("furnace")) return sub(ItemTarget.of(Items.FURNACE, 1));
+        ItemTarget fuel = fuelFor(bot, in, missing);
+        if (fuel != null) return sub(fuel);
+        return new SmeltTask(recipe, missing);
+    }
+
+    /** What to fetch to smelt {@code n} items, or null if the fuel we carry will do. */
+    public static ItemTarget fuelFor(Bot bot, Ingredient in, int n) {
         int fuelTicks = 0;
         for (int i = 0; i < 36; i++) {
             var s = Inv.inv().getItem(i);
@@ -158,15 +165,12 @@ public class ObtainTask extends Task {
                 fuelTicks += AbstractFurnaceBlockEntity.getFuel().getOrDefault(s.getItem(), 0) * s.getCount();
             }
         }
-        if (fuelTicks < missing * 200) {
-            // charcoal/coal preferred; planks are the fallback everyone has
-            ItemTarget fuel = Inv.count(Items.COAL) > 0 || bot.planner().cost(Items.COAL) < 20
-                    ? ItemTarget.of(Items.COAL, Inv.count(Items.COAL) + (missing + 7) / 8)
-                    : new ItemTarget("planks", s -> s.is(net.minecraft.tags.ItemTags.PLANKS),
-                    java.util.List.of(Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS),
-                    Inv.count(s -> s.is(net.minecraft.tags.ItemTags.PLANKS)) + (missing * 2 + 2) / 3);
-            return sub(fuel);
-        }
-        return new SmeltTask(recipe, missing);
+        if (fuelTicks >= n * 200) return null;
+        // charcoal/coal preferred; planks are the fallback everyone has
+        return Inv.count(Items.COAL) > 0 || bot.planner().cost(Items.COAL) < 20
+                ? ItemTarget.of(Items.COAL, Inv.count(Items.COAL) + (n + 7) / 8)
+                : new ItemTarget("planks", s -> s.is(net.minecraft.tags.ItemTags.PLANKS),
+                java.util.List.of(Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS),
+                Inv.count(s -> s.is(net.minecraft.tags.ItemTags.PLANKS)) + (n * 2 + 2) / 3);
     }
 }

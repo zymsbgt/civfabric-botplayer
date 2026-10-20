@@ -226,7 +226,9 @@ public final class Bot {
 
     private void trackStuck() {
         var p = player();
-        if (!Nav.travelling()) {
+        // not moving because we're breaking a block is work, not being stuck (the gather's own
+        // time limit gives up on one that won't break)
+        if (!Nav.travelling() || Minecraft.getInstance().gameMode != null && Minecraft.getInstance().gameMode.isDestroying()) {
             stuckAnchor = null;
             stuckTicks = 0;
         } else if (stuckAnchor == null || p.position().distanceTo(net.minecraft.world.phys.Vec3.atBottomCenterOf(stuckAnchor)) > 2) {

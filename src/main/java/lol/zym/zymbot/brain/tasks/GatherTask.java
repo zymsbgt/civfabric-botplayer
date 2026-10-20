@@ -137,6 +137,19 @@ public class GatherTask extends Task {
         return false;
     }
 
+    /**
+     * Hangs over water (a flooded cave's ceiling, a lake's overhang): we'd mine it swimming, 25x
+     * slower, and the stuck check keeps pulling us out before it breaks. Leave it for later.
+     */
+    private static boolean overWater(BlockPos p) {
+        for (int dy = 1; dy <= 2; dy++) {
+            BlockPos b = p.below(dy);
+            if (WorldView.water(b)) return true;
+            for (var d : net.minecraft.core.Direction.Plane.HORIZONTAL) if (WorldView.water(b.relative(d))) return true;
+        }
+        return false;
+    }
+
     private Status findTarget(Bot bot) {
         BotConfig cfg = BotConfig.get();
         if (search == null) {
@@ -146,7 +159,7 @@ public class GatherTask extends Task {
         if (!search.step(24)) return Status.RUNNING;
         for (BlockPos p : search.results()) {
             BlockState s = WorldView.state(p);
-            if (!BlockRules.natural(s) || !WorldView.exposed(p) || cavesIn(p, s)) continue;
+            if (!BlockRules.natural(s) || !WorldView.exposed(p) || cavesIn(p, s) || overWater(p)) continue;
             if (!bot.civ().canMine(bot.memory(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).toString())) continue;
             if (bot.nearSomeoneElsesBuild(p)) continue;
             if (outOfReachAboveGround(p)) continue;

@@ -130,8 +130,10 @@ public final class Planner {
                 boolean hostile = !mobs.isEmpty() && mobs.stream().allMatch(t -> t.getCategory() == net.minecraft.world.entity.MobCategory.MONSTER);
                 var peace = bot.pacifism().state();
                 boolean peaceful = bot.pacifism().protecting() || peace == lol.zym.zymbot.civ.Pacifism.State.UNKNOWN;
-                double c = mobs.isEmpty() ? 40 : hostile ? (peaceful ? 400 : 90) : 30;
-                options.add(new Method(Kind.HUNT, c, item, null, mobs, null, null));
+                // a Pokémon that drops it only counts as a source if one is about: species are
+                // patchy, and exploring for a rare one (a stone axe off a Kleavor) is a long walk
+                double c = mobs.isEmpty() ? (pokemonNearby(item) ? 40 : INF) : hostile ? (peaceful ? 400 : 90) : 30;
+                if (c < INF) options.add(new Method(Kind.HUNT, c, item, null, mobs, null, null));
             }
 
             for (RecipeHolder<CraftingRecipe> h : Recipes.craftingFor(item)) {
@@ -312,5 +314,12 @@ public final class Planner {
             }
         }
         return best;
+    }
+
+    /** A wild Pokémon in sight (64 blocks) that would drop this. */
+    private boolean pokemonNearby(Item item) {
+        var p = bot.player();
+        return !bot.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, p.getBoundingBox().inflate(64),
+                e -> e.isAlive() && lol.zym.zymbot.inv.PokemonFood.drops(e, st -> st.is(item))).isEmpty();
     }
 }

@@ -1,5 +1,7 @@
 package lol.zym.zymbot.brain.tasks;
 
+import lol.zym.zymbot.craft.ItemTarget;
+
 import lol.zym.zymbot.Bot;
 import lol.zym.zymbot.BotConfig;
 import lol.zym.zymbot.brain.Task;
@@ -35,6 +37,7 @@ public class SmeltTask extends Task {
     private boolean placed;
     private Breaker reclaim;
     private int wait;
+    private boolean fuelChecked;
 
     public SmeltTask(RecipeHolder<SmeltingRecipe> recipe, int count) {
         this.recipe = recipe;
@@ -58,6 +61,15 @@ public class SmeltTask extends Task {
         if (child != null) {
             runChild(bot);
             return Status.RUNNING;
+        }
+        // cooking and levelling start us here directly: bring fuel along before finding we have none
+        if (!fuelChecked) {
+            fuelChecked = true;
+            ItemTarget fuel = ObtainTask.fuelFor(bot, input, count - made());
+            if (fuel != null) {
+                setChild(bot, new ObtainTask(fuel));
+                return Status.RUNNING;
+            }
         }
         if (wait > 0) {
             wait--;
