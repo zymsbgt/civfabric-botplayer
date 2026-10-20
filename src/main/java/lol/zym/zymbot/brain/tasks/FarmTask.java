@@ -139,7 +139,9 @@ public class FarmTask extends Task {
             if (!WorldView.loaded(p) || skipped(p)) continue;
             BlockState s = WorldView.state(p);
             Kind k = null;
-            if (ripe(s, p)) k = Kind.HARVEST;
+            // CivFabric: a crop harvested without a hoe always fails, destroying it for nothing
+            if (ripe(s, p) && (bestHoe() >= 0 || !bot.civ().present() || !(s.getBlock() instanceof CropBlock))) k = Kind.HARVEST;
+            else if (ripe(s, p)) why = "no hoe: harvesting without one destroys the crop";
             else if (open(p.above())) {
                 if (s.is(Blocks.FARMLAND)) {
                     rememberPlot(bot, dim, p);

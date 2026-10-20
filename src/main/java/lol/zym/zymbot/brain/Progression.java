@@ -51,7 +51,8 @@ public final class Progression {
         add("cook_meat", () -> rawMeat() == null || !Inv.has(Items.FURNACE), b -> cook(rawMeat()));
 
         // ---- phase 2: a farm. The Grower makes it; everyone else sends it their seeds -------
-        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0 || farmed(), b -> obtain(Items.WOODEN_HOE, 1));
+        // the Grower always carries a hoe: CivFabric destroys any crop harvested without one
+        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1));
         add("seeds", () -> !ClassPlan.isGrower(b()) || farmed() || seedKinds() >= 2 && seedCount() >= 12, Progression::seeds);
         add("farm", () -> !ClassPlan.isGrower(b()) || farmPlots(b()) >= FARM_PLOTS, b -> new LayFieldTask());
         add("share_seeds", () -> ClassPlan.isGrower(b()) || seedCount() == 0 || grower(b()) == null || teamFarm(b()) >= FARM_PLOTS,

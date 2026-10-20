@@ -16,3 +16,4 @@ hub/hub-data.json*
 
 hub/hub-data*.json
 .DS_Store
+hub/hub-token.txt

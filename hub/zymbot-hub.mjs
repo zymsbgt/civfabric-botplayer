@@ -8,7 +8,8 @@
 //
 // No dependencies. Run:   ZYMBOT_HUB_TOKEN=secret node hub/zymbot-hub.mjs
 // Env: ZYMBOT_HUB_PORT (25599), ZYMBOT_HUB_HOST (0.0.0.0), ZYMBOT_HUB_TOKEN (required for non-local
-//      hosts), ZYMBOT_RANGE (150), ZYMBOT_HUB_DATA (hub-data.json next to this file)
+//      hosts; connections from this machine itself don't need it), ZYMBOT_RANGE (150),
+//      ZYMBOT_HUB_DATA (hub-data.json next to this file)
 
 import http from "node:http";
 import fs from "node:fs";
@@ -318,6 +319,9 @@ function send(sv, body) {
 
 function authorized(req) {
   if (!TOKEN) return true;
+  // this machine's own bots and the MCP server: the token is for other machines on the LAN
+  const from = req.socket.remoteAddress || "";
+  if (from === "127.0.0.1" || from === "::1" || from === "::ffff:127.0.0.1") return true;
   const h = req.headers["authorization"] || "";
   const given = Buffer.from(h.replace(/^Bearer\s+/i, ""));
   const want = Buffer.from(TOKEN);

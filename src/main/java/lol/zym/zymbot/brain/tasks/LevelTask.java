@@ -69,7 +69,9 @@ public class LevelTask extends Task {
                 var st = lol.zym.zymbot.world.WorldView.state(p);
                 if (st.getBlock() instanceof net.minecraft.world.level.block.CropBlock c && c.isMaxAge(st)) ripe++;
             }
-            if (ripe > 0 || !LayFieldTask.seedCrops().isEmpty())
+            if (Inv.bestTier(net.minecraft.world.item.HoeItem.class) < 0)
+                options.add(new Option("making a hoe for the farm", 1.0, () -> new ObtainTask(ItemTarget.of(Items.WOODEN_HOE, 1))));
+            else if (ripe > 0 || !LayFieldTask.seedCrops().isEmpty())
                 options.add(new Option("working the farm (" + ripe + " ripe)", 7.0 / 4, () -> new FarmTask(home, 10, 8)));
         }
         // cooking meat pays 5-7 Farmer XP a piece, and the team eats it
