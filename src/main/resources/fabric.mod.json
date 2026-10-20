@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "zymbot",
+  "version": "${version}",
+  "name": "ZymBot",
+  "description": "A client-side autonomous player for the ZymCivModded pack: survives, gathers, crafts, smelts, eats a varied diet, sleeps, recovers graves, catches Pokémon and respects CivFabric class gates.",
+  "authors": ["ZymSB"],
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "mixins": ["zymbot.mixins.json"],
+  "entrypoints": {
+    "client": ["lol.zym.zymbot.ZymBotMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*",
+    "baritone": ">=1.11"
+  },
+  "suggests": {
+    "civfabric": "*",
+    "cobblemon": "*"
+  }
+}

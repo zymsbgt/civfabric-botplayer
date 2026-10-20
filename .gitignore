@@ -1,0 +1,18 @@
+node_modules/
+*.log
+
+# gradle / fabric
+.gradle/
+build/
+out/
+run/
+.idea/
+*.iml
+.vscode/
+bin/
+.DS_Store
+hs_err_*.log
+hub/hub-data.json*
+
+hub/hub-data*.json
+.DS_Store

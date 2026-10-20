@@ -1,0 +1,222 @@
+# Realistic Plant Growth Configuration File
+#
+# A Fabric port of the Realistic Plant Growth plugin by TheRealPredator, GPL-3.0. The original, its
+# documentation and the author's donation link are at https://realistic-plant-growth.nightevolution.de/
+#
+# Names here are block and biome ids, not Bukkit enums. A bare uppercase name like WHEAT or SNOWY_TAIGA
+# is read as minecraft:wheat and minecraft:snowy_taiga, so the plugin's own files load unchanged;
+# anything carrying a namespace is taken as written, which is how modded crops such as
+# farmersdelight:cabbages can be governed at all. The upstream comments pointed at the Spigot Material
+# and Biome javadocs for the list of valid names — those are the one place a name in this file cannot
+# come from now. Use the ids the game itself reports (F3, or /rpg info holding the seed).
+#
+########################################################################################################################
+#|                                                                                                                    |#
+#| General Settings                                                                                                   |#
+#|                                                                                                                    |#
+########################################################################################################################
+
+# List of worlds where this plugin is active. Worlds not listed here will use default growth behavior.
+enabled_worlds:
+- world
+- your_world_nether
+- your_world_the_end
+
+# When set to 'true', the world whitelist above will function as a world blacklist,
+# enabling the plugin on all worlds except those listed.
+use_enabled_worlds_as_world_blacklist: false
+
+# Limits the use of bonemeal on plants to the specified amount.
+# Setting 'bonemeal_limit: 0' completely disables the use of bone meal.
+# Negative numbers deactivate this feature (e.g., 'bonemeal_limit: -1').
+# Note: This feature is currently not implemented.
+bonemeal_limit: 3
+
+# Required natural sky light level for plant growth.
+# Sky light level: 0: allows underground growth. (Additional light sources are still necessary.)
+# Sky light level 10-12: corresponds to sunlight filtered through leaves.
+# Sky light level 15: plants only grow in direct sunlight. (Allows glass ceilings.)
+min_natural_light: 15
+
+# When a player harvests a plant that has grown on farmland, the farmland is automatically replaced with a
+# coarse dirt block. Consequently, the player is required to re-hoe the area to prepare it for seeding new plants.
+# Setting 'destroy_farmland' to 'true' enables this feature.
+#
+# Off here, and not implemented: CivFabric already turns farmland to coarse dirt on harvest and prices
+# a Farmer's field around that cost. Doing it twice would charge the same harvest twice.
+destroy_farmland: false
+
+# Determines whether a player needs a hoe to harvest plants. If set to 'true', players must use a hoe for harvesting.
+# If 'require_hoe' is set to 'true' and a plant is harvested without a hoe, the plant will not drop anything.
+#
+# Off here, and not implemented, for the same reason as 'destroy_farmland' above: CivFabric's harvest
+# rules already decide what a hoe is worth.
+require_hoe: false
+
+# Determines whether farmer villagers are affected by the 'require_hoe' and 'destroy_farmland' settings.
+# These settings apply only to crops affected by GrowthModifier rules.
+#
+# When set to 'true':
+# - destroy_farmland:
+#   Farmland will be converted to coarse dirt when villagers harvest GrowthModified plants.
+#   The player must re-till the soil to replant crops.
+# - require_hoe:
+#   Villagers will not receive crop drops from GrowthModified plants, effectively disabling villager farming.
+# - disable_composter_interaction:
+#   Villagers will no longer be able to fill composters with collected seeds.
+#
+# When set to 'false':
+# Villagers are unaffected by these settings and will farm GrowthModified crops normally.
+villager:
+  destroy_farmland: true
+  require_hoe: true
+  disable_composter_interaction: true
+
+# Only crops a PLAYER planted are subject to GrowthModifier rules. Not in the original plugin —
+# added by the port, because without it a village generated in a biome its crop cannot grow in
+# watches its farm plots die, which reads as a broken world rather than a designed rule.
+#
+# What this exempts, and why it needs no list: only player placement records a position, so
+# anything unmarked is exempt by construction. That covers world-generated crops (village farm
+# plots, and the wild patches Farmer's Delight and Farm & Charm scatter) and anything a farmer
+# villager replants. No villager detection is involved.
+#
+# Self-limiting for the player: harvesting removes the crop, and replanting it makes it yours, so
+# a village plot is a one-time forage. Not self-limiting for the villager — a tended village farm
+# regenerates indefinitely, so a player camped beside a taiga village never strictly needs a wheat
+# biome. Accepted deliberately: eight blocks tended by one villager is a trickle, and it gives a
+# village a reason to be worth settling near.
+only_player_planted: true
+
+# Bone meal obeys the same biome and sky-light rules as ordinary growth, and applying it marks the
+# crop as player-handled.
+#
+# Neither is the plugin's behaviour. Bone-meal growth does not fire a grow event, and the plugin
+# registers no fertilise listener at all — its BonemealListener hooks the interaction, writes a
+# debug line and returns. So today the only limit on bone meal is 'bonemeal_limit' above, and three
+# applications will raise wheat in a taiga exactly as fast as in a plains. The entire biome system
+# is optional for anyone with a composter.
+#
+# Marking follows from the same reasoning as 'only_player_planted': bone meal is unambiguously
+# farming rather than foraging, so a player who bone-meals a village plot has adopted it and takes
+# the rules with it.
+#
+# Consequence worth knowing: bone-mealing a crop in a biome it cannot grow in now rolls its death
+# chance. The act of forcing it is what kills it. That is sharper than the plugin, where the same
+# action silently works.
+bonemeal_respects_biome: true
+
+# Planting the same crop in the same spot twice within this many in-game days kills it. Plant
+# something else and the ground is fine; leave the spot alone this long and it forgets.
+#
+# Not from the plugin and not from Civconomy — both were searched and neither has anything like it.
+# Recorded when a crop is planted rather than when it is harvested, because a harvest is not one
+# event: crops are broken, picked by right-click, taken by pistons, or harvested by CivFabric's
+# replant ability, which never breaks the block and so fires nothing this mod could hear.
+#
+# Applies only to player-planted crops, like every other rule here. Set to 0 to switch it off.
+soil_rotation_days: 5
+
+# Left-click to read the ground. Holding a seed and clicking a block shows what that seed would do
+# at the spot you are pointing at, including whether the soil is still spent from the last crop -
+# asked before the seed goes in, rather than learned by being refused. The break is not interrupted:
+# dirt takes many hits, so the question costs nothing and you can still dig while carrying seeds.
+#
+# Sneak and left-click a standing plant to read that plant instead: its rates here, or that it is
+# wild and exempt from all of this. Sneak is required because crops come out in one hit, and a
+# readout about a plant the click just destroyed is worse than none - so this gesture, and only this
+# one, cancels the break. Sneak-left-click never destroys a plant; a plain punch still harvests.
+display_growth_rates: true
+
+# Only active, if display_growth_rates is enabled.
+# Time in seconds before the growth rates are shown to the player again.
+# Holding the button down fires the check every tick; this throttles the message, not the
+# cancellation, so the second click of a held button cannot break what the first one refused to.
+#
+# Three seconds because that is how long an actionbar line lasts before it fades. Any longer and a
+# player reading a row of crops watches the text disappear and come back; at three it simply
+# refreshes as they move along the row.
+display_cooldown: 3
+
+
+########################################################################################################################
+#|                                                                                                                    |#
+#| Composter Settings                                                                                                 |#
+#|                                                                                                                    |#
+#| Configuration options for customizing composter behavior and functionality in the game.                            |#
+#|                                                                                                                    |#
+########################################################################################################################
+
+composter:
+  # If enabled, composters will NOT produce bonemeal.
+  # This also disables bonemeal farming via hopper-fed composters.
+  disable_bonemeal_output: false
+  
+  # If enabled, allows players to rapidly fill composters by holding Shift and right-clicking
+  # with compostable items. Speeds up manual composting.
+  quick_fill_with_shift: false
+  
+  # If enabled, allows bonemeal to be added to composters by players or hoppers.
+  # Each use of bonemeal increases the compost level by 1 (100% success rate).
+  allow_bonemeal_as_input: false
+
+
+########################################################################################################################
+#|                                                                                                                    |#
+#| Growth in Darkness                                                                                                 |#
+#|                                                                                                                    |#
+#| Plants that ignore the 'min_natural_light' requirement entirely. Everything else dies where it cannot see the sky. |#
+#|                                                                                                                    |#
+########################################################################################################################
+
+# List of plants that grow without requiring natural sky light, allowing growth
+# in artificial light sources like torches and lanterns (not the same as UV-Light).
+# Names are block ids, bare uppercase or namespaced, exactly as in GrowthModifiers.yml.
+grow_in_dark:
+  # Overworld plants
+  # Ocean
+  # End plants
+  # Nether plants
+  - RED_MUSHROOM
+  - BROWN_MUSHROOM
+  # Cocoa grows on jungle trees, under the canopy — and min_natural_light of 15 means direct,
+  # unobstructed sky, which leaves do not give. Left out of this list, cocoa can fail on a real
+  # tree in a real jungle. Here it ignores sky light entirely, so a roofed or underground cocoa
+  # farm works too, provided it is still standing in a jungle: the biome gate is separate.
+  - COCOA
+  - CAVE_VINES
+  - GLOW_LICHEN
+  - KELP
+  - CHORUS_FLOWER
+  - WEEPING_VINES
+  - TWISTING_VINES
+  - NETHER_WART
+  - WARPED_FUNGUS
+  - CRIMSON_FUNGUS
+
+
+########################################################################################################################
+#|                                                                                                                    |#
+#| Sounds & Effects                                                                                                   |#
+#|                                                                                                                    |#
+#| Configure played sounds or particle effects used by this plugin.                                                   |#
+#|                                                                                                                    |#
+#| Available sounds and effects:                                                                                      |#
+#| Sound:            https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/Sound.html                                   |#
+#| Particle Effect:  https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Effect.html                                  |#
+#|                                                                                                                    |#
+########################################################################################################################
+
+plant_death_sound_effect:
+  # Enables the sound and particle effects for dying plants.
+  enabled: true
+  # The sound played when a plant dies. Choose from available sounds (link provided above).
+  sound: BLOCK_CROP_BREAK
+  # Adjust the volume (0.0 to 1.0).
+  volume: 0.5
+  # Adjust the pitch (0.5 to 2.0, 1.0 is normal pitch).
+  pitch: 0.5
+  # The particle effect played when a plant dies. Choose from available particle effects (link provided above).
+  effect: SMOKE
+  # Adjust effect data if applicable.
+  data: 1

@@ -1,0 +1,80 @@
+plugins {
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = 'zymbot'
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // Baritone does the pathfinding and movement. The same jar must be in the instance's mods folder.
+    modImplementation files("libs/baritone-api-fabric-1.11.2.jar")
+    // Baritone nests nether-pathfinder; Fabric unpacks it in a real install, Loom's dev run doesn't.
+    runtimeOnly files("build/devlibs/nether-pathfinder-1.4.1.jar")
+
+    // -PplantGrowth runs the dev world with Realistic Plant Growth (taken from the Prism instance),
+    // so its biome, sky-light and soil-rotation rules apply to the test farm.
+    def plantGrowth = file("${System.getProperty('user.home')}/Library/Application Support/PrismLauncher/instances/${project.prism_instance}/minecraft/mods/realisticplantgrowth-0.1.3.jar")
+    if (project.hasProperty("plantGrowth") && plantGrowth.exists()) {
+        modLocalRuntime files(plantGrowth)
+        runtimeOnly "org.yaml:snakeyaml:2.3"
+    }
+}
+
+loom {
+    runs {
+        client {
+            // ./gradlew runClient -PdevWorld=zymbot-test  opens/creates a test world on launch
+            if (project.hasProperty('devWorld')) vmArg "-Dzymbot.devWorld=${project.property('devWorld')}"
+        }
+    }
+}
+
+tasks.register('extractDevLibs', Copy) {
+    from(zipTree(file("libs/baritone-api-fabric-1.11.2.jar"))) { include 'META-INF/jars/nether-pathfinder-*.jar' }
+    eachFile { it.path = it.name }
+    includeEmptyDirs = false
+    into file("build/devlibs")
+}
+tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'extractDevLibs' }
+
+processResources {
+    def version = project.version
+    inputs.property "version", version
+    filesMatching("fabric.mod.json") {
+        expand "version": version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// Copies the remapped jar (and Baritone) into the Prism instance's mods folder.
+// Usage: ./gradlew installToPrism  (the dedicated "ZymBot Modded" instance; another with -Pprism_instance="...")
+tasks.register('installToPrism', Copy) {
+    dependsOn remapJar
+    def instance = project.findProperty('prism_instance')
+    def modsDir = file("${System.getProperty('user.home')}/Library/Application Support/PrismLauncher/instances/${instance}/minecraft/mods")
+    from remapJar.archiveFile
+    from file("libs/baritone-api-fabric-1.11.2.jar")
+    into modsDir
+    doFirst {
+        if (!modsDir.exists()) throw new GradleException("Mods folder not found: ${modsDir}")
+        modsDir.listFiles().findAll { it.name.startsWith('zymbot-') && it.name.endsWith('.jar') }.each { it.delete() }
+    }
+}

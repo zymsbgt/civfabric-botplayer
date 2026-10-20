@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "zymbot": {
+      "command": "node",
+      "args": ["mcp/zymbot-mcp.mjs"],
+      "env": {
+        "ZYMBOT_HUB_URL": "http://127.0.0.1:25599",
+        "ZYMBOT_HUB_TOKEN": "${ZYMBOT_HUB_TOKEN}"
+      }
+    }
+  }
+}

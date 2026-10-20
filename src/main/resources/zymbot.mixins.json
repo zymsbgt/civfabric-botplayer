@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "lol.zym.zymbot.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "DeathPacketMixin",
+    "OptionInstanceAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
