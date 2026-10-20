@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "DeathPacketMixin",
+    "FishingHookAccessor",
     "OptionInstanceAccessor"
   ],
   "injectors": {

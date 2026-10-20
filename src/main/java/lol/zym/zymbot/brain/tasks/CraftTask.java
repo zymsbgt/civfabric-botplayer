@@ -100,6 +100,16 @@ public class CraftTask extends Task {
                 }
                 Nav.stop();
                 if (ticks % 20 == 0 || ticks < 3) Placer.use(tablePos);
+                // ten seconds of clicks and no screen: most likely the table isn't where we think (a
+                // placement the server put a block over from where the client showed it). Forget it
+                // and look again; a real one nearby gets found by looking at the blocks.
+                if (ticks > 20 * 10 && duds.size() < 3) {
+                    duds.add(tablePos);
+                    bot.memory().removeStation(tablePos);
+                    phase = Phase.STATION;
+                    ticks = 0;
+                    return Status.RUNNING;
+                }
                 if (ticks > 20 * 75) return fail("crafting table won't open");
                 return Status.RUNNING;
             }
@@ -203,9 +213,13 @@ public class CraftTask extends Task {
         }
     }
 
+    /** Tables that wouldn't open for us this time: not tried again. */
+    private final java.util.Set<BlockPos> duds = new java.util.HashSet<>();
+
     private Status station(Bot bot) {
         BlockPos me = bot.player().blockPosition();
         var known = bot.memory().nearestStation("crafting_table", me, bot.dim(), 24);
+        if (known.isPresent() && duds.contains(known.get().at.pos())) known = java.util.Optional.empty();
         if (known.isPresent()) {
             BlockPos p = known.get().at.pos();
             if (WorldView.state(p).getBlock() instanceof CraftingTableBlock) {
@@ -218,7 +232,7 @@ public class CraftTask extends Task {
         }
         // a table standing right here at our own base (a teammate's): use it rather than place another
         for (BlockPos p : BlockPos.betweenClosed(me.offset(-4, -2, -4), me.offset(4, 2, 4))) {
-            if (WorldView.state(p).getBlock() instanceof CraftingTableBlock && !bot.nearSomeoneElsesBuild(p)) {
+            if (WorldView.state(p).getBlock() instanceof CraftingTableBlock && !bot.nearSomeoneElsesBuild(p) && !duds.contains(p)) {
                 tablePos = p.immutable();
                 bot.memory().addStation("crafting_table", tablePos, bot.dim(), false);
                 phase = Phase.OPEN;

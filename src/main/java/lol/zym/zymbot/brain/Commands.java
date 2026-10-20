@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "tell",
-            "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops");
+            "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -256,6 +256,15 @@ public final class Commands {
                         sb.append(e.getItem().getCount()).append(" ").append(Inv.id(e.getItem().getItem()).replace("minecraft:", ""))
                                 .append(" @").append(e.blockPosition().toShortString()).append(e.isInWater() ? " (water)" : "").append(" | ");
                     return sb.toString();
+                }
+                case "cost" -> {
+                    // what the planner thinks an item costs us, and how it would get it
+                    if (a.length < 2) return "cost <item>";
+                    ItemTarget t = ItemTarget.parse(a[1], 1);
+                    if (t == null || t.candidates().isEmpty()) return "don't know " + a[1];
+                    var it = t.candidates().get(0);
+                    double c = bot.planner().cost(it);
+                    return Inv.id(it) + ": " + (c >= lol.zym.zymbot.craft.Planner.INF ? "no known way" : String.format("%.0f", c));
                 }
                 case "grave" -> {
                     // point the bot at a grave of its own to empty (one it forgot), or list the ones it knows

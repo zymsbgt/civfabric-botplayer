@@ -69,6 +69,7 @@ public class FarmTask extends Task {
     private int sinceSweep;
     private int harvested, sown, tilled;
     private String idle = "";
+    private int idleTicks;
     private final Set<String> told = new HashSet<>();
 
     public FarmTask(BlockPos center, int range, int minutes) {
@@ -92,6 +93,10 @@ public class FarmTask extends Task {
     @Override
     protected Status onTick(Bot bot) {
         if (ticks > minutes * 60 * 20) return Status.SUCCESS;
+        if (child != null) {
+            runChild(bot);
+            return Status.RUNNING;
+        }
         if (bot.inventoryFull()) return Status.SUCCESS;
 
         if (breaker != null) return tickBreaker(bot);
@@ -102,8 +107,14 @@ public class FarmTask extends Task {
             jobTicks = 0;
             if (job == null) {
                 Nav.stop();
+                // the crops are growing and there's nothing to tend: fish meanwhile, back as soon as there's work
+                if (++idleTicks > 20 * 30 && FishTask.canFish(bot)) {
+                    idleTicks = 0;
+                    setChild(bot, new FishTask(center, () -> next(bot) != null, 5));
+                }
                 return Status.RUNNING;
             }
+            idleTicks = 0;
             idle = "";
         }
         jobTicks++;
