@@ -71,11 +71,13 @@ public final class TeamBus {
     private volatile boolean connected;
     private volatile String lastError = "not connected yet";
     private long lastSeq = -1;
+    /** Which of the configured hub addresses we're on. */
+    private volatile int hubAt;
 
     public TeamBus(String self) {
         this.self = self;
         loop.scheduleWithFixedDelay(this::cycle, 500, 1000, TimeUnit.MILLISECONDS);
-        ZymBotMod.LOG.info("Team hub {} (server {})", BotConfig.get().hubUrl, server);
+        ZymBotMod.LOG.info("Team hub {} (server {})", String.join(" or ", hubUrls()), server);
     }
 
     public void close() {
@@ -124,20 +126,38 @@ public final class TeamBus {
                 for (JsonElement e : nb.getAsJsonArray("boards")) bs.add(e.getAsJsonObject());
                 boards = bs;
             }
-            if (!connected) ZymBotMod.LOG.info("Connected to team hub");
+            if (!connected) ZymBotMod.LOG.info("Connected to team hub {}", hubUrl());
             connected = true;
         } catch (Exception e) {
             if (connected || !String.valueOf(e.getMessage()).equals(lastError))
-                ZymBotMod.LOG.warn("Team hub unreachable: {}", e.toString());
+                ZymBotMod.LOG.warn("Team hub {} unreachable: {}", hubUrl(), e.toString());
             connected = false;
             lastError = String.valueOf(e.getMessage());
+            // nobody answered there (not a refusal): the next address gets the next cycle
+            List<String> urls = hubUrls();
+            if (e instanceof java.io.IOException && urls.size() > 1) {
+                hubAt = (hubAt + 1) % urls.size();
+                lastError = null; // log the next one's failure too
+            }
         }
+    }
+
+    /** The configured hub addresses, in the order to try them. */
+    private static List<String> hubUrls() {
+        List<String> out = new ArrayList<>();
+        for (String u : BotConfig.get().hubUrl.split("[,\\s]+")) if (!u.isBlank()) out.add(u.replaceAll("/+$", ""));
+        return out.isEmpty() ? List.of("http://127.0.0.1:25599") : out;
+    }
+
+    private String hubUrl() {
+        List<String> urls = hubUrls();
+        return urls.get(Math.floorMod(hubAt, urls.size()));
     }
 
     private HttpRequest.Builder req(String path, String... query) {
         StringBuilder q = new StringBuilder("?server=").append(enc(server)).append("&as=").append(enc(self));
         for (int i = 0; i + 1 < query.length; i += 2) q.append('&').append(query[i]).append('=').append(enc(query[i + 1]));
-        String base = BotConfig.get().hubUrl.replaceAll("/+$", "");
+        String base = hubUrl();
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(base + path + q)).timeout(Duration.ofSeconds(5))
                 .header("content-type", "application/json");
         String token = BotConfig.get().hubToken;

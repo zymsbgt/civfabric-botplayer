@@ -2,10 +2,10 @@
 
 Bots on any machine on the LAN join the same team through the hub running on the main Mac.
 
-- **Hub:** `http://192.168.0.3:25599`.
+- **Hub:** `http://192.168.8.163:25599` (the main Mac's address on the LAN; check it with `ipconfig getifaddr en0`).
 - **Token:** in `hub/hub-token.txt` on the main Mac. It isn't committed. Connections from the Mac
   itself need no token; every other machine does.
-- **Server:** `192.168.0.19:25565`.
+- **Server:** the test machine, `192.168.8.167:25565`.
 
 ## 1. Copy the bot instance over
 
@@ -22,12 +22,14 @@ clients can't share an instance.
 Edit `minecraft/config/zymbot.json` in each copy:
 
 ```json
-"hubUrl": "http://192.168.0.3:25599",
+"hubUrl": "http://192.168.8.163:25599",
 "hubToken": "<the token from hub/hub-token.txt>",
 "autoStart": false
 ```
 
-Leave everything else as it is: `gatherMode` is `auto`, `sprint` is `false`, and the `teammates`
+`hubUrl` may list several addresses, comma-separated (`"http://192.168.8.163:25599, http://192.168.0.3:25599"`): the bot
+tries them in turn and stays on the first that answers. Edit the file with the game closed; it's read at
+startup. Leave everything else as it is: `gatherMode` is `auto`, `sprint` is `false`, and the `teammates`
 list should include `Bot1`, `Bot2`, `Bot3` and `Bot4`.
 
 ## 3. Accounts
@@ -37,11 +39,11 @@ names: two clients with the same name kick each other off.
 
 ## 4. Launch
 
-Launch each instance with its own account, and join `192.168.0.19:25565` (the server is offline
+Launch each instance with its own account, and join `192.168.8.167:25565` (the server is offline
 mode). From a terminal you can do it in one go (Windows path shown):
 
 ```
-"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.0.19:25565 -a Bot3
+"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.8.167:25565 -a Bot3
 ```
 
 A second launch while Prism is running is forwarded to that same Prism process, which ignores `-a`.

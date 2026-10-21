@@ -44,7 +44,10 @@ public final class BotConfig {
     /** Answer chat commands in chat. ZymLabs local chat only reaches 150 blocks, so it stays local. */
     public boolean replyInChat = false;
 
-    /** Team hub every bot connects to (hub/zymbot-hub.mjs), on this machine or another. */
+    /**
+     * Team hub every bot connects to (hub/zymbot-hub.mjs), on this machine or another. Several,
+     * comma-separated, are tried in turn until one answers (a machine that moves between networks).
+     */
     public String hubUrl = "http://127.0.0.1:25599";
 
     /** Shared secret; must match ZYMBOT_HUB_TOKEN on the hub. */
