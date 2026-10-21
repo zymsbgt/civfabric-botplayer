@@ -248,8 +248,11 @@ public final class Brain {
                         bot.event("couldn't finish " + milestone.id() + ": " + progress.failureReason());
                         progression.snooze(milestone.id(), 10 * 60_000L);
                         if (progress instanceof ObtainTask o) askBoard(bot, o.target());
-                    } else {
-                        if (milestone.done().getAsBoolean()) bot.event("milestone " + milestone.id() + " done");
+                    } else if (milestone.done().getAsBoolean()) {
+                        bot.event("milestone " + milestone.id() + " done");
+                    } else if (progress.ticks < 40) {
+                        // ended at once and nothing changed: it would start again every tick
+                        progression.snooze(milestone.id(), 60_000L);
                     }
                     progress.stop(bot);
                     progress = null;

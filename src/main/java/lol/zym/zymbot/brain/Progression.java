@@ -309,7 +309,9 @@ public final class Progression {
         // keep a stack of scaffolding on us
         counts.computeIfPresent(Items.DIRT, (k, v) -> v > 64 ? v - 64 : null);
         counts.computeIfPresent(Items.COBBLESTONE, (k, v) -> v > 64 ? v - 64 : null);
-        return counts.entrySet().stream().filter(e -> e.getValue() >= 8).max(java.util.Map.Entry.comparingByValue())
+        // a nearly full pack takes the small piles too: a full one ends every farming shift at once
+        int least = Inv.freeSlots() <= 3 ? 1 : 8;
+        return counts.entrySet().stream().filter(e -> e.getValue() >= least).max(java.util.Map.Entry.comparingByValue())
                 .map(java.util.Map.Entry::getKey).orElse(null);
     }
 

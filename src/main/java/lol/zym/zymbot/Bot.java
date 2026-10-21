@@ -727,6 +727,25 @@ public final class Bot {
         if (worst >= 0) {
             event("inventory full: dropping a spare " + Inv.id(Inv.inv().getItem(worst).getItem()).replace("minecraft:", ""));
             Inv.click(menu, Inv.menuSlot(menu, worst), 1, ClickType.THROW);
+            return;
+        }
+        // no chest near home to stash in (a base just moved, say), and a chest takes a free slot to
+        // craft: the smallest pile of odds and ends goes, or the pack stays full for good
+        BlockPos home = memory.home == null ? null : memory.home.pos();
+        if (home == null || memory.chests.values().stream().anyMatch(r -> r.ours && r.at != null && r.at.pos().closerThan(home, 32))) return;
+        int least = -1;
+        for (int i = 0; i < 36; i++) {
+            ItemStack s = Inv.inv().getItem(i);
+            if (s.isEmpty() || s.isDamageableItem() || Inv.isFood(s) || s.is(net.minecraft.tags.ItemTags.BEDS) || s.is(net.minecraft.tags.ItemTags.WOOL)
+                    || s.is(Items.CRAFTING_TABLE) || s.is(Items.FURNACE) || s.is(Items.CHEST) || s.is(Items.TORCH)
+                    || s.is(net.minecraft.tags.ItemTags.LOGS) || s.is(net.minecraft.tags.ItemTags.PLANKS) || s.is(Items.STICK)
+                    || s.getItem() instanceof net.minecraft.world.item.BlockItem bi && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock
+                    || BotConfig.get().keepItems.contains(Inv.id(s.getItem()))) continue;
+            if (least < 0 || s.getCount() < Inv.inv().getItem(least).getCount()) least = i;
+        }
+        if (least >= 0) {
+            event("inventory full, no chest at home: dropping " + Inv.inv().getItem(least).getCount() + " " + Inv.id(Inv.inv().getItem(least).getItem()).replace("minecraft:", ""));
+            Inv.click(menu, Inv.menuSlot(menu, least), 1, ClickType.THROW);
         }
     }
 

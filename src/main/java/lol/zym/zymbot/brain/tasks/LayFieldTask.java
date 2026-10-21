@@ -58,8 +58,8 @@ public class LayFieldTask extends Task {
             BlockPos from = base != null ? base : bot.memory().home != null ? bot.memory().home.pos() : bot.player().blockPosition();
             water = findSite(bot, from, crops);
             // back from a walk to water we'd seen: look around here, not the base again (the base can
-            // sit on a hill 60 blocks above its river), so long as it's a field the base can use
-            if (water == null && explores > 0 && bot.player().blockPosition().closerThan(from, 96))
+            // sit on a hill 60 blocks above its river). Far off, the base moves to the field
+            if (water == null && explores > 0 && (bot.player().blockPosition().closerThan(from, 96) || mayMoveBase(bot)))
                 water = findSite(bot, bot.player().blockPosition(), crops);
             if (water == null) {
                 var shore = lol.zym.zymbot.memory.Landmarks.nearest(bot, "water"::equals, 200);
@@ -75,6 +75,7 @@ public class LayFieldTask extends Task {
             }
             var mem = bot.memory();
             if (mem.home == null) mem.home = new BotMemory.Pos(water, bot.dim());
+            else if (!water.closerThan(from, MOVE_AT) && mayMoveBase(bot)) moveBase(bot, water);
             int marked = 0;
             for (BlockPos p : plots(bot, water)) {
                 if (marked >= PLOTS) break;
@@ -86,6 +87,39 @@ public class LayFieldTask extends Task {
         }
         setChild(bot, new FarmTask(water, WET, 6));
         return Status.RUNNING;
+    }
+
+    /** A field this far from the base takes the base with it, rather than a walk every shift. */
+    private static final int MOVE_AT = 40;
+
+    /**
+     * Only the bootstrap base: ours, the team's "first farm", with no field to speak of yet. A base
+     * a leader named, or one already farmed, stays put.
+     */
+    private static boolean mayMoveBase(Bot bot) {
+        var mem = bot.memory();
+        if (mem.home == null || !lol.zym.zymbot.brain.ClassPlan.isGrower(bot)) return false;
+        if (lol.zym.zymbot.brain.Progression.farmPlots(bot) >= lol.zym.zymbot.brain.Progression.FARM_PLOTS / 2) return false;
+        if (mem.teamHomes.isEmpty()) return true;
+        var main = mem.teamHomes.get("main");
+        return mem.teamHomes.size() == 1 && main != null && "first farm".equals(main.purpose);
+    }
+
+    /** Home, and the team's first base, go where the water is; a bed or chest left far behind is made again there. */
+    private static void moveBase(Bot bot, BlockPos water) {
+        var mem = bot.memory();
+        var at = new BotMemory.Pos(water, bot.dim());
+        bot.event("no farmland by water near the base at " + mem.home.pos().toShortString() + ": moving the base to the water at " + water.toShortString());
+        mem.home = at;
+        var main = mem.teamHomes.get("main");
+        if (main != null) main.at = at;
+        if (mem.bed != null && !mem.bed.pos().closerThan(water, 32)) {
+            // the bed and settle steps make, place and claim a new one at the new base
+            mem.bed = null;
+            mem.bedClaimed = null;
+            mem.bedWarm = false;
+        }
+        mem.save();
     }
 
     /** Grass or dirt at the water's level, wet from it, open to the sky, nobody else's. Nearest the water first. */
