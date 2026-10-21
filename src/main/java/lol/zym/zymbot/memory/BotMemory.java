@@ -234,6 +234,10 @@ public final class BotMemory {
         if (sd != null) key = sd.ip.contains(":") || sd.ip.startsWith("[") ? sd.ip : sd.ip + ":25565";
         else if (mc.getSingleplayerServer() != null) key = "sp:" + mc.getSingleplayerServer().getWorldData().getLevelName();
         else key = "unknown";
+        for (var a : lol.zym.zymbot.BotConfig.get().serverAliases.entrySet()) {
+            String from = a.getKey().contains(":") ? a.getKey() : a.getKey() + ":25565";
+            if (from.equalsIgnoreCase(key)) key = a.getValue().contains(":") ? a.getValue() : a.getValue() + ":25565";
+        }
         try {
             byte[] h = MessageDigest.getInstance("SHA-256").digest(key.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(h, 0, 4);

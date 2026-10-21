@@ -2,10 +2,10 @@
 
 Bots on any machine on the LAN join the same team through the hub running on the main Mac.
 
-- **Hub:** `http://192.168.8.163:25599` (the main Mac's address on the LAN; check it with `ipconfig getifaddr en0`).
+- **Hub:** `http://192.168.0.3:25599` (the main Mac's address on the LAN; check it with `ipconfig getifaddr en0`).
 - **Token:** in `hub/hub-token.txt` on the main Mac. It isn't committed. Connections from the Mac
   itself need no token; every other machine does.
-- **Server:** the test machine, `192.168.8.167:25565`.
+- **Server:** the test machine, `192.168.0.19:25565` (it was `192.168.8.167:25565`; see "If the server moves").
 
 ## 1. Copy the bot instance over
 
@@ -22,9 +22,11 @@ clients can't share an instance.
 Edit `minecraft/config/zymbot.json` in each copy:
 
 ```json
-"hubUrl": "http://192.168.8.163:25599",
+"hubUrl": "http://192.168.0.3:25599, http://192.168.8.163:25599",
 "hubToken": "<the token from hub/hub-token.txt>",
-"autoStart": false
+"autoStart": false,
+"autoUpdate": true,
+"serverAliases": { "192.168.0.19:25565": "192.168.8.167:25565" }
 ```
 
 `hubUrl` may list several addresses, comma-separated (`"http://192.168.8.163:25599, http://192.168.0.3:25599"`): the bot
@@ -39,11 +41,11 @@ names: two clients with the same name kick each other off.
 
 ## 4. Launch
 
-Launch each instance with its own account, and join `192.168.8.167:25565` (the server is offline
+Launch each instance with its own account, and join `192.168.0.19:25565` (the server is offline
 mode). From a terminal you can do it in one go (Windows path shown):
 
 ```
-"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.8.167:25565 -a Bot3
+"C:\Program Files\PrismLauncher\prismlauncher.exe" -l "ZymBot Bot3" -s 192.168.0.19:25565 -a Bot3
 ```
 
 A second launch while Prism is running is forwarded to that same Prism process, which ignores `-a`.
@@ -74,6 +76,14 @@ hub, so the jar only has to be copied over once (the first version with the upda
 
 A bot with `autoUpdate` on runs whatever jar the hub serves, so the token is what keeps anyone
 else on the network from running code on that machine. Don't share it.
+
+## If the server moves
+
+A bot keeps its memory (home, bed, chests, fields) per server address, and the hub keeps the team
+and its boards the same way. Joined at a new address, a bot would start over on a team of its own.
+`serverAliases` says the new address is the old server: `"<new host:port>": "<old host:port>"`.
+Every bot on that server needs the same line (the first address it ever used is the one on the
+right). It's read at startup, so edit it with the game closed.
 
 ## If they can't reach the hub
 

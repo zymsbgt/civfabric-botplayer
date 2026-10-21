@@ -62,6 +62,13 @@ public final class BotConfig {
     public boolean autoUpdate = false;
 
     /**
+     * A server we know that has moved: {@code "<new host:port>": "<old host:port>"}. Memory, the
+     * team and the job boards are kept per server address, so without this a move starts every bot
+     * over (no home, no bed, no chests) on a team of its own.
+     */
+    public Map<String, String> serverAliases = new LinkedHashMap<>();
+
+    /**
      * Radio range shown in messages. The hub enforces the real limit (ZYMBOT_RANGE, default 150,
      * matching ZymLabs local chat): bots further apart, or in different dimensions, can't talk.
      */
