@@ -39,7 +39,9 @@ if (!TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
 
 /** server key -> { members: Map<name,{state,updated}>, inboxes: Map<name,[]>, boards: Map<id,board> } */
 const servers = new Map();
-let seq = 0;
+// From the clock, not 0: bots poll "messages after N" and keep N across a hub restart, so numbers
+// that started over were all below it and nothing new reached them until the count caught up
+let seq = Date.now();
 let dirty = false;
 
 function server(key) {
@@ -345,6 +347,9 @@ function mod() {
 
 // ---- http ----------------------------------------------------------------------------
 
+const refusedAt = new Map();
+const seenFrom = new Set();
+
 function authorized(req) {
   if (!TOKEN) return true;
   // this machine's own bots and the MCP server: the token is for other machines on the LAN
@@ -375,7 +380,19 @@ const httpServer = http.createServer(async (req, res) => {
     res.writeHead(code, { "content-type": "application/json" });
     res.end(JSON.stringify(obj));
   };
-  if (!authorized(req)) return reply(401, { ok: false, error: "bad token" });
+  if (!authorized(req)) {
+    // a bot on another machine that never shows up: this says whether it reached us at all
+    const from = req.socket.remoteAddress || "?";
+    if (!refusedAt.has(from) || Date.now() - refusedAt.get(from) > 60_000) {
+      refusedAt.set(from, Date.now());
+      console.log(`Refused ${req.method} ${url.pathname} from ${from}: ${req.headers["authorization"] ? "wrong token" : "no token"}`);
+    }
+    return reply(401, { ok: false, error: "bad token" });
+  }
+  if (!seenFrom.has(req.socket.remoteAddress)) {
+    seenFrom.add(req.socket.remoteAddress);
+    console.log(`First request from ${req.socket.remoteAddress}: ${req.method} ${url.pathname}${url.search}`);
+  }
   try {
     // the mod jar, for bots with autoUpdate on: behind the token like everything else
     if (req.method === "GET" && url.pathname === "/mod/info") {
