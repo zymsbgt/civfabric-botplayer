@@ -469,6 +469,7 @@ public final class Bot {
 
     /** A chat line that may be a command from a teammate within earshot. */
     public void onChat(String sender, String message) {
+        if (sender != null) forecast.onPlayerChat(this, sender, message);
         if (sender == null || sender.equalsIgnoreCase(name()) || !isTeammate(sender)) return;
         String[] addr = Commands.address(message, name(), team.knownNames());
         if (addr == null) return;
@@ -843,7 +844,13 @@ public final class Bot {
         o.add("class_xp", new com.google.gson.Gson().toJsonTree(memory.classXp));
         o.addProperty("class_slots", lol.zym.zymbot.civ.ClassSheet.slots(this));
         o.addProperty("drain_armed", memory.drainArmed);
-        if (memory.forecastNight >= 0) o.addProperty("forecast", lol.zym.zymbot.civ.Forecast.describe(this));
+        lol.zym.zymbot.civ.Forecast.publish(this, o);
+        // a leader's driver asks players things in chat (their forecast readings): it needs the answers
+        if (role() == Role.LEADER) {
+            JsonArray heard = new JsonArray();
+            forecast.chatHeard().forEach(heard::add);
+            o.add("chat_heard", heard);
+        }
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));

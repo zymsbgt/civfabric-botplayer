@@ -175,7 +175,7 @@ rl.on("line", async (line) => {
           protocolVersion: params?.protocolVersion || "2025-06-18",
           capabilities: { tools: {} },
           serverInfo: { name: "zymbot", version: "0.2.0" },
-          instructions: "You lead ZymBots in the ZymCivModded Minecraft pack through a leader bot. You only know what that leader knows and can only reach bots and job boards within 150 blocks of it. Start with list_leaders, then leader_view.",
+          instructions: "You lead ZymBots in the ZymCivModded Minecraft pack through a leader bot. You only know what that leader knows and can only reach bots and job boards within 150 blocks of it. Start with list_leaders, then leader_view. The bots pool their /lunarforecast readings of coming nights (the command `forecast`); players' readings help too: ask nearby players in chat (`say`) what /lunarforecast told them, read their answers in the leader's chat_heard, and record each with `forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank]`. Players misremember, ranks included, so `forecast players` scores each player's past reports against what the nights turned out to be: decide with `forecast trust <player> full|show|ignore <reason>` whose readings count.",
         },
       });
     } else if (method === "tools/list") {

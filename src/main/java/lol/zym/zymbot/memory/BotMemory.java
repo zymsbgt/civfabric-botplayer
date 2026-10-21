@@ -136,19 +136,50 @@ public final class BotMemory {
     /** Our class role (grower, smith, delver, scholar) and its classes; kept once chosen. */
     public String classRole;
     public List<String> classPlan = new ArrayList<>();
-    /**
-     * The last {@code /lunarforecast} reading: the night it's about (day number, -1 for none), the
-     * moon it named ("Blood Moon", null when it sensed nothing) and its confidence (0..1).
-     */
-    public long forecastNight = -1;
-    public String forecastMoon;
-    public double forecastConfidence;
+    /** One {@code /lunarforecast} reading, ours or someone else's, as it reached us. */
+    public static final class Reading {
+        public String reader;
+        public long night;
+        /** The moon it named, as the server prints it ("Super Blood Moon"); null when it sensed nothing. */
+        public String moon;
+        /** The confidence printed with it (0..1), or -1 if we weren't told. */
+        public double confidence = -1;
+        /** The reader's forecast rank (best of Librarian and Hunter), from the printed confidence; -1 unknown. */
+        public int rank = -1;
+        /** The rank a player said they had, which may be misremembered; -1 if not said. */
+        public int statedRank = -1;
+        /** "bot", or "player" for a player's report (told to a leader, or their pasted reading). */
+        public String source;
+        /** Who passed it on to us; null when it's ours or the reader told us. */
+        public String via;
+        public long readMillis;
+        /** Another version of the same reader's night that also reached us. */
+        public String conflict;
+    }
+
+    /** Forecast readings of coming (and, for players, recent) nights: "reader night" -> reading. */
+    public Map<String, Reading> notebook = new LinkedHashMap<>();
+    /** What each night turned out to be, as a guess (blood_moon...none), by night. */
+    public Map<Long, String> moonOutcomes = new LinkedHashMap<>();
+
+    /** How far a player's forecast reports are trusted: full (they count), show (listed only), ignore. */
+    public static final class Trust {
+        public String level;
+        public String reason;
+        public String by;
+        public long at;
+    }
+
+    public Map<String, Trust> forecastTrust = new LinkedHashMap<>();
     /** Our {@code /guessforecast} for {@link #guessNight}: blood_moon/blue_moon/harvest_moon/none, the class and its XP if right. */
     public long guessNight = -1;
     public String guessMoon, guessClass;
     public double guessReward;
+    /** Times we've changed the guess for {@link #guessNight}. */
+    public int guessChanges;
     /** How the last guess turned out, as the server put it at sunset. */
     public String guessResult;
+
     /** Places worth coming back to (water, wild crops, ore, villages, named marks). */
     public Map<String, Landmark> landmarks = new LinkedHashMap<>();
     /** Containers we've looked inside: "dim x y z" -> what was there. */
