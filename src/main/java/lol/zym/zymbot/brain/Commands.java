@@ -43,7 +43,7 @@ public final class Commands {
             "classes", List.of("role", "refresh"));
 
     public static final String HELP = String.join("\n",
-            "status | inv | milestones | team | help",
+            "status | inv | diet (what each food is worth now) | milestones | team | help",
             "start | pause | stop (clears job) | role worker|leader",
             "get <item> [n] | give <player> <item> [n] | hunt [animal] [n]",
             "follow [player] | come [player] | goto x y z | goto x z | explore [dist]",
@@ -111,6 +111,23 @@ public final class Commands {
                 }
                 case "inv", "inventory" -> {
                     return bot.inventorySummary();
+                }
+                case "diet", "foods" -> {
+                    // each food we carry: times in Spice of Fabric's recent meals, and the hunger it restores now
+                    if (!lol.zym.zymbot.inv.Diet.active()) return "no Spice of Fabric: every food is worth its full value";
+                    List<String> out = new ArrayList<>();
+                    Set<net.minecraft.world.item.Item> seen = new HashSet<>();
+                    for (int i = 0; i < 36; i++) {
+                        ItemStack s = Inv.inv().getItem(i);
+                        var f = Inv.food(s);
+                        if (f == null || !seen.add(s.getItem())) continue;
+                        out.add(BuiltInRegistries.ITEM.getKey(s.getItem()).getPath() + " x" + Inv.count(s.getItem())
+                                + ": eaten " + lol.zym.zymbot.inv.Diet.timesEaten(bot, s) + ", worth "
+                                + Math.round(lol.zym.zymbot.inv.Diet.nutrition(bot, s)) + "/" + lol.zym.zymbot.inv.Diet.baseHunger(s)
+                                + " (stack says " + f.nutrition() + ")"
+                                + (Inv.riskyFood(s) ? " (risky)" : ""));
+                    }
+                    return "last " + lol.zym.zymbot.inv.Diet.history() + " meals; " + (out.isEmpty() ? "carrying no food" : String.join("; ", out));
                 }
                 case "milestones", "progress" -> {
                     return String.join(", ", bot.brain().progression().status());

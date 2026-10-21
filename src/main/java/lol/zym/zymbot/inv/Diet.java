@@ -63,7 +63,17 @@ public final class Diet {
         if (f == null) return 0;
         load();
         if (!active) return f.nutrition();
-        return worth(f.nutrition(), timesEaten(bot, s));
+        return worth(baseHunger(s), timesEaten(bot, s));
+    }
+
+    /**
+     * The game's own hunger value. Spice of Fabric (through Capsaicin) hands out a stack's food
+     * already cut for repeats, so cutting that again counted a twice-eaten food as worth nothing.
+     */
+    public static int baseHunger(ItemStack s) {
+        FoodProperties own = s.getItem().components().get(net.minecraft.core.component.DataComponents.FOOD);
+        FoodProperties f = own != null ? own : Inv.food(s);
+        return f == null ? 0 : f.nutrition();
     }
 
     /** Spice of Fabric's {@code max(0, round(hungerValue * base^timesEaten))}. */
@@ -133,7 +143,7 @@ public final class Diet {
             int past = active ? timesEaten(bot, s) : 0;
             for (int n = 0; n < s.getCount(); n++) {
                 int k = seen.merge(id, 1, Integer::sum) - 1;
-                total += active ? worth(f.nutrition(), Math.min(past + k, history)) : f.nutrition();
+                total += active ? worth(baseHunger(s), Math.min(past + k, history)) : f.nutrition();
             }
         }
         return total;
