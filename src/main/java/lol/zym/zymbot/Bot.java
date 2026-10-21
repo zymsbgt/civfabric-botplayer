@@ -66,6 +66,7 @@ public final class Bot {
     private final lol.zym.zymbot.civ.Pacifism pacifism = new lol.zym.zymbot.civ.Pacifism();
     private final lol.zym.zymbot.civ.Health health = new lol.zym.zymbot.civ.Health();
     private final lol.zym.zymbot.civ.ClassSheet classSheet = new lol.zym.zymbot.civ.ClassSheet();
+    private final lol.zym.zymbot.civ.Forecast forecast = new lol.zym.zymbot.civ.Forecast();
     private long lastHealedAt = -10_000;
     /** A teammate is handing us something until this tick: hold still and pick it up. */
     private long receiveUntil;
@@ -139,6 +140,10 @@ public final class Bot {
         return classSheet;
     }
 
+    public lol.zym.zymbot.civ.Forecast forecast() {
+        return forecast;
+    }
+
     public lol.zym.zymbot.civ.Pacifism pacifism() {
         return pacifism;
     }
@@ -162,6 +167,11 @@ public final class Bot {
 
     public void healed() {
         lastHealedAt = tick;
+    }
+
+    /** Ask CivFabric ({@code /bed}) in a moment whether we still hold our bed. */
+    public void checkBed() {
+        bedCheckAt = tick + 20;
     }
 
     public Brain brain() {
@@ -393,6 +403,7 @@ public final class Bot {
         }
         if (civ.onMessage(memory, text, null)) return;
         if (pacifism.onMessage(text)) return;
+        if (forecast.onMessage(this, text)) return;
         if (text.contains("You're knocked out")) {
             downedSince = System.currentTimeMillis();
             gaveUp = false;
@@ -600,6 +611,7 @@ public final class Bot {
             p.connection.sendCommand("bed");
         }
         classSheet.tick(this);
+        forecast.tick(this);
         lol.zym.zymbot.memory.ChestIndex.tick(this);
         lol.zym.zymbot.memory.Landmarks.tick(this);
         if (tick % 100 == 50) lol.zym.zymbot.brain.ClassPlan.reconcile(this);
@@ -831,6 +843,7 @@ public final class Bot {
         o.add("class_xp", new com.google.gson.Gson().toJsonTree(memory.classXp));
         o.addProperty("class_slots", lol.zym.zymbot.civ.ClassSheet.slots(this));
         o.addProperty("drain_armed", memory.drainArmed);
+        if (memory.forecastNight >= 0) o.addProperty("forecast", lol.zym.zymbot.civ.Forecast.describe(this));
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));

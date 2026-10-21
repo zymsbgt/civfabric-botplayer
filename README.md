@@ -109,6 +109,12 @@ across at least 3 kinds, and it hunts for the meats it's short of.
 
   Bots holding stitches, a medkit or wound mush treat hurt teammates within 16 blocks. The
   `pacifist` command reports all of this.
+- **Moon forecast** (`civ/Forecast.java`, CivFabric with Enhanced Celestials). Once a day, by day,
+  the bot reads `/lunarforecast` and guesses what it named (`none` when it sensed nothing) with
+  `/guessforecast`, putting the XP on the class it's levelling next. A right guess pays at sunset.
+  When the reading names a blood moon, the bot checks its bed claim and, late in the afternoon,
+  goes home to its bed to wait, so the blood moon reflexes start from there. `forecast` reports the
+  reading, the guess and the last result.
 
 **Water.** Baritone swims, but slowly and with no thought for air. Bots don't chase Pokémon,
 animals or drops into deep water (water with water under it), except their own grave's items;
@@ -295,6 +301,7 @@ The same language works in chat (`zb …`), in `/zymbot …`, over the radio and
 | `crops` | what grows here (biome rules) and which of the bot's seeds would |
 | `catch` · `sleep` · `skipnight` · `settle` · `campfire` (warm the bed) | |
 | `heal <player>` · `pacifist` | treat a teammate; report pacifism, regeneration and bed warmth |
+| `forecast` | the last moon reading, the guess on it and how the last guess went |
 | `classes` · `classes <a> <b> [c]` · `classes role <grower\|smith\|delver\|scholar>` · `classes refresh` | show or set the bot's classes |
 | `level [class]` | one round of earning XP in a class (its best-paying action) |
 | `phase` · `chests` | food/farm/level phase and farm size; the chest index |

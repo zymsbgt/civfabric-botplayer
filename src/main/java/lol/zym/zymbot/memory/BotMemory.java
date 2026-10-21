@@ -136,6 +136,19 @@ public final class BotMemory {
     /** Our class role (grower, smith, delver, scholar) and its classes; kept once chosen. */
     public String classRole;
     public List<String> classPlan = new ArrayList<>();
+    /**
+     * The last {@code /lunarforecast} reading: the night it's about (day number, -1 for none), the
+     * moon it named ("Blood Moon", null when it sensed nothing) and its confidence (0..1).
+     */
+    public long forecastNight = -1;
+    public String forecastMoon;
+    public double forecastConfidence;
+    /** Our {@code /guessforecast} for {@link #guessNight}: blood_moon/blue_moon/harvest_moon/none, the class and its XP if right. */
+    public long guessNight = -1;
+    public String guessMoon, guessClass;
+    public double guessReward;
+    /** How the last guess turned out, as the server put it at sunset. */
+    public String guessResult;
     /** Places worth coming back to (water, wild crops, ore, villages, named marks). */
     public Map<String, Landmark> landmarks = new LinkedHashMap<>();
     /** Containers we've looked inside: "dim x y z" -> what was there. */
