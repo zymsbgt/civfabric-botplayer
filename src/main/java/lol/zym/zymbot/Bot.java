@@ -77,6 +77,8 @@ public final class Bot {
     private final Set<Block> surveyed = new HashSet<>();
     private boolean enabled;
     private long tick;
+    /** When to ask CivFabric ({@code /bed}) whether we still hold our bed: after joining, after dying. */
+    private long bedCheckAt = 200;
     private String lastActionKey;
     private long lastActionTick;
     private BlockPos pendingGrave;
@@ -373,6 +375,7 @@ public final class Bot {
             heard.removeFirst();
             heardAt.removeFirst();
         }
+        if (onBedMessage(text)) return;
         if (lastActionKey != null && tick - lastActionTick < 60 && civ.onMessage(memory, text, lastActionKey)) {
             event("refused: " + text + " (" + lastActionKey + ")");
             lastActionKey = null;
@@ -399,6 +402,57 @@ public final class Bot {
         } else if (text.contains("too hungry to rest") || text.contains("not enough night left")) {
             brain.skipNight();
         }
+    }
+
+    /**
+     * CivFabric's bed claims: one bed per player, taken by the first right-click on it, and refused
+     * to everyone else (on the action bar). The claim is what makes a bed a respawn point.
+     */
+    private boolean onBedMessage(String text) {
+        boolean claimed;
+        if (text.contains("You have no bed. Sleep in one") || text.contains("Your bed is gone. Sleep in another")
+                || text.contains("You have unclaimed your bed")) {
+            claimed = false;
+        } else if (text.contains("Your bed was destroyed")) {
+            if (memory.bed != null) event("CivFabric: our bed at " + memory.bed.pos().toShortString() + " was destroyed");
+            memory.bed = null;
+            memory.bedWarm = false;
+            claimed = false;
+        } else if (text.contains("This bed is already claimed by another player")) {
+            // only ever our own bed gets clicked, so ours has been taken: settle afresh
+            if (memory.bed != null && "use:bed".equals(lastActionKey) && tick - lastActionTick < 60) {
+                event("our bed at " + memory.bed.pos().toShortString() + " is claimed by another player; need a new one");
+                memory.bed = null;
+                memory.bedWarm = false;
+                memory.save();
+            }
+            return true;
+        } else if (text.contains("Your bed is right here") || text.contains("Your bed is ") && text.contains(" blocks")
+                || text.contains("You have a bed in the")) {
+            claimed = true;
+        } else {
+            return false;
+        }
+        if (!Boolean.valueOf(claimed).equals(memory.bedClaimed)) {
+            memory.bedClaimed = claimed;
+            memory.save();
+            event(claimed ? "CivFabric: our bed claim holds (we respawn at it)"
+                    : "CivFabric: we hold no bed claim" + (memory.bed != null ? "; claiming ours at " + memory.bed.pos().toShortString() : ""));
+        }
+        return true;
+    }
+
+    /** The latest server text since {@code sinceTick} containing any of {@code needles}, or null. */
+    public String lastHeard(long sinceTick, String... needles) {
+        String found = null;
+        Iterator<String> t = heard.iterator();
+        Iterator<Long> at = heardAt.iterator();
+        while (t.hasNext()) {
+            String s = t.next();
+            if (at.next() < sinceTick) continue;
+            for (String n : needles) if (s.contains(n)) found = s;
+        }
+        return found;
     }
 
     /** A chat line that may be a command from a teammate within earshot. */
@@ -540,6 +594,10 @@ public final class Bot {
         noteDamage();
         if (tick % 5 == 0) noteLosses();
         pacifism.tick(this);
+        if (bedCheckAt > 0 && tick >= bedCheckAt && civ.present()) {
+            bedCheckAt = -1;
+            p.connection.sendCommand("bed");
+        }
         classSheet.tick(this);
         lol.zym.zymbot.memory.ChestIndex.tick(this);
         lol.zym.zymbot.memory.Landmarks.tick(this);
@@ -572,6 +630,8 @@ public final class Bot {
         Controls.releaseAll();
         addGrave(at);
         downedSince = null;
+        bedCheckAt = tick + 200; // a death with no claim scatters us: find out if that's what happened
+
     }
 
     private boolean handleDeath() {

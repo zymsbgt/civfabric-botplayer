@@ -11,11 +11,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
 
 /**
- * Put a bed down (making this spot home) and sleep in it once so CivFabric's bed claim
- * registers it as ours. Picks a flat 2-block spot away from anyone else's build.
+ * Put a bed down (making this spot home) and click it, so CivFabric's bed claim registers it as
+ * ours and it becomes our respawn point. Picks a flat 2-block spot away from anyone else's build.
  */
 public class SettleTask extends Task {
     private BlockPos placedAt;
+    private boolean claiming;
 
     @Override
     public String name() {
@@ -24,13 +25,21 @@ public class SettleTask extends Task {
 
     @Override
     protected Status onTick(Bot bot) {
+        if (claiming) {
+            // a click claims it, at any hour; if that didn't take, the claim_bed step tries again
+            return runChild(bot) == Status.RUNNING ? Status.RUNNING : Status.SUCCESS;
+        }
         if (placedAt != null) {
             if (WorldView.state(placedAt).is(net.minecraft.tags.BlockTags.BEDS)) {
                 bot.memory().bed = new BotMemory.Pos(placedAt, bot.dim());
+                bot.memory().bedClaimed = false; // not until the server confirms the click
+                bot.memory().bedWarm = false;
                 if (bot.memory().home == null) bot.memory().home = new BotMemory.Pos(placedAt, bot.dim());
                 bot.event("settled: bed at " + placedAt.toShortString());
                 bot.memory().save();
-                return Status.SUCCESS;
+                setChild(bot, new SleepTask(placedAt, true));
+                claiming = true;
+                return Status.RUNNING;
             }
             if (ticks > 40) return fail("bed didn't place");
             return Status.RUNNING;

@@ -50,6 +50,22 @@ public class ObtainTask extends Task {
         return this;
     }
 
+    /**
+     * Only by smelting (levelling a smelting class wants the furnace to pay): otherwise coal comes
+     * the cheap way, out of the ore with a pickaxe, and the XP goes to the Miner instead.
+     */
+    public ObtainTask smeltIt() {
+        for (Item c : target.candidates()) failedMethods.addAll(notSmelting(c));
+        return this;
+    }
+
+    /** Every top-level method for {@code item} but smelting, as {@link Planner#best} exclusions. */
+    public static Set<String> notSmelting(Item item) {
+        Set<String> out = new HashSet<>();
+        for (Planner.Kind k : Planner.Kind.values()) if (k != Planner.Kind.SMELT) out.add(k + " " + Inv.id(item));
+        return out;
+    }
+
     private ObtainTask sub(ItemTarget t) {
         ObtainTask o = new ObtainTask(t, ancestors);
         o.depth = depth + 1;

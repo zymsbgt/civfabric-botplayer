@@ -25,10 +25,11 @@ import java.util.Set;
 
 /**
  * Sit out a blood moon. Pacifism is off for the night and everything comes for us (a spider pack
- * killed an unarmed bot in five seconds), so: walk to the team base, dig a 1x1 pit three deep in
- * plain ground, put a block over our head, and wait for dawn there. The cover goes at ground level,
- * where it has solid ground on every side to be placed against. With no spot to dig, stand by the
- * base with the team.
+ * killed an unarmed bot in five seconds), so: dig a 1x1 pit three deep in plain ground, put a block
+ * over our head, and wait for dawn there. The cover goes at ground level, where it has solid ground
+ * on every side to be placed against. Only when the base is close and nothing has found us yet do we
+ * walk home first (a bot that walked home through a Super Blood Moon died on the way, every time);
+ * otherwise we dig in where we stand. With no spot to dig, stand by the base with the team.
  */
 public class ShelterTask extends Task {
     private enum Phase { GO, PICK, WALK, DIG, COVER, HOLD, OUT }
@@ -71,8 +72,13 @@ public class ShelterTask extends Task {
         switch (phase) {
             case GO -> {
                 BlockPos b = base(bot);
-                if (b == null || b.closerThan(p.blockPosition(), 10) || phaseTicks > 20 * 180) {
+                boolean walk = b != null && b.closerThan(p.blockPosition(), 48) && !bot.pacifism().superBloodMoon()
+                        && bot.ticks() - bot.lastHurtTick > 200;
+                if (!walk || b.closerThan(p.blockPosition(), 10) || phaseTicks > 20 * 60) {
                     Nav.stop();
+                    if (!walk && b != null && !b.closerThan(p.blockPosition(), 10))
+                        bot.event("blood moon: " + (bot.pacifism().superBloodMoon() ? "a super one" : "too far from home or under attack")
+                                + "; digging in here");
                     to(Phase.PICK);
                 } else if (phaseTicks % 40 == 1) Nav.goNear(b, 4);
             }
@@ -106,6 +112,15 @@ public class ShelterTask extends Task {
                     to(Phase.PICK);
                     break;
                 }
+                // standing across two blocks, digging out one of them drops us nowhere: step onto the
+                // middle of the column first (no sneaking, so we fall in once it's open)
+                Vec3 mid = Vec3.atBottomCenterOf(spot);
+                if (Math.abs(p.getX() - mid.x) > 0.2 || Math.abs(p.getZ() - mid.z) > 0.2) {
+                    Controls.lookAt(mid.add(0, p.getEyeHeight(), 0), 180f);
+                    Controls.forward(true);
+                    break;
+                }
+                Controls.forward(false);
                 dig(p.blockPosition().below());
             }
             case COVER -> {
@@ -125,6 +140,12 @@ public class ShelterTask extends Task {
             }
             case HOLD -> {
                 Nav.stop();
+                // knocked (or fought) out of the pit: dig in again
+                if (spot != null && !inPit(p.blockPosition())) {
+                    bad.add(spot);
+                    to(Phase.PICK);
+                    break;
+                }
                 // hungry in the hole: eat (the eat reflex can't take over from us)
                 if (p.getFoodData().getFoodLevel() <= 14 && EatTask.choose(bot) >= 0 && phaseTicks % 200 == 0) {
                     setChild(bot, new EatTask());
@@ -159,6 +180,16 @@ public class ShelterTask extends Task {
             }
         }
         return Status.RUNNING;
+    }
+
+    /** In the pit, under its cover: nothing can reach us but an arrow through a gap. */
+    public boolean dugIn() {
+        return phase == Phase.HOLD && spot != null && inPit(Minecraft.getInstance().player.blockPosition())
+                && !WorldView.passable(spot.below());
+    }
+
+    private boolean inPit(BlockPos at) {
+        return at.getX() == spot.getX() && at.getZ() == spot.getZ() && at.getY() <= spot.getY() - 2;
     }
 
     /**
@@ -238,6 +269,7 @@ public class ShelterTask extends Task {
     }
 
     private void stopDigging() {
+        Controls.forward(false);
         if (digging != null) Minecraft.getInstance().gameMode.stopDestroyBlock();
         digging = null;
     }

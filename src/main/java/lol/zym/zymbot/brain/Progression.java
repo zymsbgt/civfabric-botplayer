@@ -68,6 +68,10 @@ public final class Progression {
         // a bed in whatever colour we have 3 wool of; shear for it (wooden shears, no class) otherwise
         add("bed", () -> b().memory().bed != null || Inv.find(s -> s.is(ItemTags.BEDS)) >= 0, Progression::bed);
         add("settle", () -> b().memory().bed != null, b -> new SettleTask());
+        // CivFabric gives a bed to whoever clicks it first, and only a claimed bed is a respawn point:
+        // without one every death washes us up somewhere random on the island. Claim it by day too
+        add("claim_bed", () -> b().memory().bed == null || !Boolean.FALSE.equals(b().memory().bedClaimed),
+                b -> new SleepTask(b.memory().bed.pos(), true));
         // CivFabric: a bed only heals with a campfire beside it, and health comes back no other way
         add("warm_bed", () -> b().memory().bed == null || b().memory().bedWarm, b -> new WarmBedTask());
         // nothing past here until the team can feed itself

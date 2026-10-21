@@ -408,12 +408,19 @@ public final class Brain {
         // a wild Pokémon that has turned on us stays angry until one of us dies (Cobblemon's anger
         // never wears off), and fliers keep up with a sprint: running only spreads the hits out. Fight
         // it. Someone's own Pokémon defending its owner is different: back off from that one.
-        LivingEntity mon = angryPokemon(bot);
+        // dug in under a blood moon: whatever is standing on the cover can't reach us, and going out to
+        // fight it is how we'd die. Only something actually hurting us down there gets an answer
+        boolean hidden = reflex instanceof ShelterTask st && st.dugIn() && bot.ticks() - bot.lastHurtTick > 40;
+        LivingEntity mon = hidden ? null : angryPokemon(bot);
         if (mon != null) return CatchPokemonTask.wild(mon) ? "fight" : "flee";
-        LivingEntity t = threat(bot);
+        LivingEntity t = hidden ? null : threat(bot);
         if (t != null) {
             boolean weak = p.getHealth() <= bot.health().fleeAt(bot);
             boolean boom = t instanceof Creeper c && (c.getSwellDir() > 0 || Inv.bestWeapon() < 0);
+            // a Super Blood Moon's mobs outrun and outlast us: getting into the ground beats a fight
+            // we'd lose or a race we can't win. Only one already on us gets fought off
+            if (bot.pacifism().superBloodMoon() && !boom && t.distanceTo(p) > 3 && !WorldView.deepWater(p.blockPosition())
+                    && !p.isUnderWater()) return "shelter";
             // hitting a mob pacifism still covers would turn its whole kin on us: walk away instead
             if (weak || boom || bot.pacifism().fightingCosts(t)) return "flee";
             return "fight";
@@ -476,7 +483,7 @@ public final class Brain {
             case "eat" -> new EatTask();
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
             case "shelter" -> {
-                bot.event("blood moon: heading home to dig in until dawn");
+                bot.event("blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "") + ": taking shelter until dawn");
                 yield new ShelterTask();
             }
             case "air" -> {

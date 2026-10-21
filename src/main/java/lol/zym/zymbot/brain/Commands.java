@@ -305,7 +305,8 @@ public final class Commands {
                 case "pacifist", "peace" -> {
                     return "pacifism " + bot.pacifism().describe() + "; natural regeneration "
                             + (bot.memory().naturalRegen == null ? "unknown (assumed " + (bot.health().naturalRegen(bot) ? "on" : "off") + ")" : bot.memory().naturalRegen ? "on" : "off")
-                            + "; bed " + (bot.memory().bed == null ? "none" : bot.memory().bedWarm ? "warm" : "cold (no campfire)");
+                            + "; bed " + (bot.memory().bed == null ? "none" : (bot.memory().bedWarm ? "warm" : "cold (no campfire)")
+                            + (Boolean.FALSE.equals(bot.memory().bedClaimed) ? ", not claimed" : ""));
                 }
                 case "sethome" -> {
                     bot.memory().home = new BotMemory.Pos(bot.player().blockPosition(), bot.dim());

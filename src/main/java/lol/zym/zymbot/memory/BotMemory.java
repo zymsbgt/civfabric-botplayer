@@ -103,6 +103,11 @@ public final class BotMemory {
     /** Which base this bot belongs to; it stays within radio range of it. */
     public String homeName;
     public Pos bed;
+    /**
+     * CivFabric holds our claim on {@link #bed}: false once the server says we have none (null until
+     * asked). Without a claim a death scatters us across the island instead of waking us at home.
+     */
+    public Boolean bedClaimed;
     public List<Pos> deaths = new ArrayList<>();
     /** Pokémon species (lower case) that have hurt us, mapped to when: they're not easy prey. */
     public Map<String, Long> fighters = new HashMap<>();

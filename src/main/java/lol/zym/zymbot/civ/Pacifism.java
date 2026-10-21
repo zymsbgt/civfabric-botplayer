@@ -34,7 +34,9 @@ public final class Pacifism {
 
     private State state = State.UNKNOWN;
     private final Map<EntityType<?>, Long> grudges = new HashMap<>();
-    private boolean bloodMoon, inVillage;
+    private boolean bloodMoon, superMoon, inVillage;
+    /** When we last heard the moon was up: the clock can lag the announcement by a moment. */
+    private long moonSeenAt;
     private long askedAt = -1;
     private int asks;
 
@@ -65,10 +67,12 @@ public final class Pacifism {
     public boolean onMessage(String text) {
         if (text.contains("Blood Moon\" rises")) {
             bloodMoon = true;
+            superMoon = text.contains("Super Blood Moon");
+            moonSeenAt = System.currentTimeMillis();
             return false; // others may want the moon too
         }
         if (text.contains("Blood Moon\" sets")) {
-            bloodMoon = false;
+            bloodMoon = superMoon = false;
             return false;
         }
         if (text.contains("You're entering a village. Monsters")) {
@@ -81,6 +85,7 @@ public final class Pacifism {
         }
         if (text.contains("but a blood moon is up") || text.contains("while a blood moon is up")) {
             bloodMoon = true;
+            moonSeenAt = System.currentTimeMillis();
             if (text.contains("currently a Pacifist")) state = State.ON;
             return true;
         }
@@ -142,9 +147,19 @@ public final class Pacifism {
         return bloodMoon;
     }
 
+    /**
+     * A Super Blood Moon: on top of the blood moon's hostility, mobs hit harder, take more killing and
+     * run faster than we do. Neither fighting nor running works; only being underground does.
+     */
+    public boolean superBloodMoon() {
+        return bloodMoon() && superMoon;
+    }
+
     /** Pacifism is on and in force: not suspended by a blood moon or a village at night. */
     public boolean protecting() {
-        if (bloodMoon && lol.zym.zymbot.world.WorldView.level().getDayTime() % 24000 < 12000) bloodMoon = false; // it's day: the moon has set
+        // it's day: the moon has set (but not on a clock that hasn't caught up with the announcement yet)
+        if (bloodMoon && lol.zym.zymbot.world.WorldView.level().getDayTime() % 24000 < 12000
+                && System.currentTimeMillis() - moonSeenAt > 60_000) bloodMoon = superMoon = false;
         return state == State.ON && !bloodMoon && !inVillage;
     }
 
@@ -183,7 +198,7 @@ public final class Pacifism {
     public String describe() {
         long now = System.currentTimeMillis();
         StringBuilder sb = new StringBuilder(state.name().toLowerCase(Locale.ROOT));
-        if (state == State.ON && !protecting()) sb.append(" (suspended: ").append(bloodMoon ? "blood moon" : "village at night").append(")");
+        if (state == State.ON && !protecting()) sb.append(" (suspended: ").append(bloodMoon ? (superMoon ? "super blood moon" : "blood moon") : "village at night").append(")");
         grudges.forEach((t, until) -> {
             if (until > now) sb.append(", ").append(BuiltInRegistries.ENTITY_TYPE.getKey(t).getPath()).append(" hostile ").append((until - now) / 1000).append("s");
         });

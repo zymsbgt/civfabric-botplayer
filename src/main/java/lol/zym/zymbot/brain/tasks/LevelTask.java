@@ -125,16 +125,17 @@ public class LevelTask extends Task {
                     () -> new ObtainTask(ItemTarget.of(it, Inv.count(it) + yield)).makeIt()));
         }
 
-        // smelting: the furnace pays on collection
+        // smelting: the furnace pays on collection. Priced, and done, by the furnace only: coal's
+        // cheapest route is mining the ore, which pays the Miner and left a Smith levelling Miner
         for (var e : book.awardsFor("smelting", clazz)) {
             ResourceLocation id = ResourceLocation.tryParse(e.getKey());
             if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) continue;
             Item out = BuiltInRegistries.ITEM.get(id);
             if (Recipes.smeltingFor(out).isEmpty()) continue;
-            double cost = planner.cost(out);
-            if (cost >= 400) continue;
-            options.add(new Option("smelting " + id.getPath(), e.getValue().xp() / Math.max(1, cost),
-                    () -> new ObtainTask(ItemTarget.of(out, Inv.count(out) + 4)).makeIt()));
+            var m = planner.best(out, ObtainTask.notSmelting(out), Set.of());
+            if (m == null || m.kind() != Planner.Kind.SMELT || m.cost() >= 400) continue;
+            options.add(new Option("smelting " + id.getPath(), e.getValue().xp() / Math.max(1, m.cost()),
+                    () -> new ObtainTask(ItemTarget.of(out, Inv.count(out) + 4)).smeltIt()));
         }
 
         // paper trains Medic as well as Librarian (CivFabric's one companion craft): the way a
