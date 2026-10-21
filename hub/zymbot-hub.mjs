@@ -105,6 +105,8 @@ function summary(st, d) {
     class_role: st.class_role, classes: st.classes, class_xp: st.class_xp, class_slots: st.class_slots,
     drain_armed: st.drain_armed, phase: st.phase, farm_plots: st.farm_plots, home: st.home, chests: st.chests,
     landmarks: st.landmarks, team_homes: st.team_homes, base: st.base,
+    // moon forecast readings, passed from bot to bot as they meet, and whose players' readings count
+    forecast: st.forecast, forecast_readings: st.forecast_readings, forecast_trust: st.forecast_trust,
   };
 }
 

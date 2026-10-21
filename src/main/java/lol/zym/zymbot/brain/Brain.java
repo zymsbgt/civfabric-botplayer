@@ -3,6 +3,7 @@ package lol.zym.zymbot.brain;
 import lol.zym.zymbot.Bot;
 import lol.zym.zymbot.BotConfig;
 import lol.zym.zymbot.brain.tasks.*;
+import lol.zym.zymbot.civ.Forecast;
 import lol.zym.zymbot.control.Controls;
 import lol.zym.zymbot.inv.Inv;
 import lol.zym.zymbot.nav.Nav;
@@ -500,6 +501,11 @@ public final class Brain {
         // even let us craft below 4)
         if (!wet && food <= 6 && EatTask.choose(bot) < 0 && System.currentTimeMillis() > noForageUntil) return "forage";
         if (bot.stuck() && System.currentTimeMillis() > noUnstuckUntil) return "unstuck";
+        // tonight's forecast names a blood moon: home before dusk, not caught out on a grave trip or
+        // an errand when it rises (ShelterTask only walks home from within 48 blocks)
+        var bedHome = !wet && Forecast.braceTime(bot) ? BraceTask.home(bot) : null;
+        if (bedHome != null && bedHome.pos().closerThan(p.blockPosition(), 128) && !bedHome.pos().closerThan(p.blockPosition(), 8))
+            return "brace";
         // a grave trip is a long walk: not unarmed (unless it's close), the progression makes a sword first
         if (bot.pendingGrave() != null && (Inv.armed() || bot.pendingGrave().closerThan(p.blockPosition(), 48))) return "grave";
         if (bot.receiving()) return "receive";
@@ -579,6 +585,10 @@ public final class Brain {
                 yield Progression.food(bot);
             }
             case "sleep" -> new SleepTask(bot.memory().bed.pos());
+            case "brace" -> {
+                bot.event("blood moon forecast: heading home before dusk");
+                yield new BraceTask();
+            }
             case "detour" -> {
                 shopping.tried(detour.at());
                 noDetourUntil = System.currentTimeMillis() + 60_000; // until it ends, at the least

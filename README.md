@@ -109,6 +109,22 @@ across at least 3 kinds, and it hunts for the meats it's short of.
 
   Bots holding stitches, a medkit or wound mush treat hurt teammates within 16 blocks. The
   `pacifist` command reports all of this.
+- **Moon forecast** (`civ/Forecast.java`, `civ/MoonOdds.java`; CivFabric with Enhanced Celestials).
+  Each bot reads `/lunarforecast` once a night, as soon as it can: after dusk the reading is
+  already about tomorrow night. Readings go into a notebook the bot publishes on the hub, and bots
+  in radio range merge each other's, so readings travel from bot to bot as they meet. The bot pools
+  every reading that counts with CivFabric's own odds (each reader's rank, from the confidence the
+  server printed). It then picks the `/guessforecast` that pays most on those odds, priced against its
+  own reading, and changes it (at most twice) as new readings arrive before dusk. The XP goes to the
+  class it's levelling next. A pooled blood moon chance of 25% or more makes it check its bed claim
+  and go home to its bed late in the afternoon, so the blood moon reflexes start from there.
+  - Players' readings join through a leader: Claude asks in chat, reads the answers in the leader's
+    `chat_heard`, and records them with `forecast note`. A pasted server sentence is taken as it
+    is. The bots' teammates count; anyone else is listed only until `forecast trust` says
+    otherwise. Every report is checked (a moon that can't rise that night, a figure that fits no
+    rank, a stated rank the figure contradicts, two versions of one night), and `forecast players`
+    scores each player's reports against what the nights turned out to be, next to how often a
+    reader of their rank would have been right.
 
 **Water.** Baritone swims, but slowly and with no thought for air. Bots don't chase Pokémon,
 animals or drops into deep water (water with water under it), except their own grave's items;
@@ -295,6 +311,8 @@ The same language works in chat (`zb …`), in `/zymbot …`, over the radio and
 | `crops` | what grows here (biome rules) and which of the bot's seeds would |
 | `catch` · `sleep` · `skipnight` · `settle` · `campfire` (warm the bed) | |
 | `heal <player>` · `pacifist` | treat a teammate; report pacifism, regeneration and bed warmth |
+| `forecast` · `forecast readings [night]` · `forecast players [name]` | pooled moon odds and the guess; the readings behind them; players' records |
+| `forecast note <player> <tonight\|tomorrow\|day> <moon\|none> [confidence%] [rank]` · `forecast trust <player> full\|show\|ignore <reason>` | leaders: record a player's reading; decide whose readings count |
 | `classes` · `classes <a> <b> [c]` · `classes role <grower\|smith\|delver\|scholar>` · `classes refresh` | show or set the bot's classes |
 | `level [class]` | one round of earning XP in a class (its best-paying action) |
 | `phase` · `chests` | food/farm/level phase and farm size; the chest index |

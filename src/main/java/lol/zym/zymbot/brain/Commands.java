@@ -30,7 +30,7 @@ public final class Commands {
 
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
-            "start", "pause", "stop", "role", "heal", "pacifist", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
+            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "tell",
             "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
@@ -40,7 +40,8 @@ public final class Commands {
             "board", List.of("create", "chest", "remove"),
             "tell", List.of("all"),
             "teamhome", List.of("set", "assign", "remove"),
-            "classes", List.of("role", "refresh"));
+            "classes", List.of("role", "refresh"),
+            "forecast", List.of("readings", "players", "note", "trust"));
 
     public static final String HELP = String.join("\n",
             "status | inv | diet (what each food is worth now) | milestones | team | help",
@@ -49,6 +50,8 @@ public final class Commands {
             "follow [player] | come [player] | goto x y z | goto x z | explore [dist]",
             "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | skipnight",
             "heal <player> (stitches/medkit/wound mush) | campfire (warm the bed) | pacifist (pacifism, regen and bed warmth)",
+            "forecast [readings [night] | players [name]] (the pooled moon odds, our guess, readings, players' records)",
+            "forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank] | forecast trust <player> full|show|ignore <reason>  (leaders)",
             "receive [seconds] (stand still and catch what a teammate throws; givers send it themselves)",
             "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | chests (the chest index) | level [class]",
             "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z",
@@ -324,6 +327,9 @@ public final class Commands {
                             + (bot.civ().present() ? "off (none in this pack)" : bot.memory().naturalRegen == null ? "unknown (assumed " + (bot.health().naturalRegen(bot) ? "on" : "off") + ")" : bot.memory().naturalRegen ? "on" : "off")
                             + "; bed " + (bot.memory().bed == null ? "none" : (bot.memory().bedWarm ? "warm" : "cold (no campfire)")
                             + (Boolean.FALSE.equals(bot.memory().bedClaimed) ? ", not claimed" : ""));
+                }
+                case "forecast", "moon" -> {
+                    return lol.zym.zymbot.civ.Forecast.command(bot, from, a);
                 }
                 case "sethome" -> {
                     bot.memory().home = new BotMemory.Pos(bot.player().blockPosition(), bot.dim());
