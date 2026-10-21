@@ -175,18 +175,29 @@ public final class BotConfig {
 
     public static void load() {
         BotConfig cfg = null;
+        unreadable = false;
         if (Files.exists(FILE)) {
             try {
                 cfg = GSON.fromJson(Files.readString(FILE), BotConfig.class);
             } catch (Exception e) {
-                ZymBotMod.LOG.warn("config/zymbot.json could not be read, using defaults", e);
+                unreadable = true;
+                ZymBotMod.LOG.error("config/zymbot.json could not be read (a JSON mistake?), using defaults until it's fixed; "
+                        + "the file is left as it is", e);
             }
         }
         instance = cfg != null ? cfg : new BotConfig();
         save();
     }
 
+    /**
+     * The file had a mistake in it: keep it for its owner to fix. Saving the defaults over a file
+     * with one typo in it threw away the hub address and token typed into it, and nothing said why
+     * the bot then couldn't find its team.
+     */
+    private static boolean unreadable;
+
     public static void save() {
+        if (unreadable) return;
         try {
             Files.createDirectories(FILE.getParent());
             Files.writeString(FILE, GSON.toJson(instance));
