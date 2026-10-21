@@ -22,6 +22,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -426,27 +427,32 @@ public final class Brain {
     }
 
     private LivingEntity threat(Bot bot) {
+        List<LivingEntity> all = threats(bot);
+        return all.isEmpty() ? null : all.get(0);
+    }
+
+    /** Hostiles that are after us (or will be), nearest first. */
+    private List<LivingEntity> threats(Bot bot) {
         var p = bot.player();
-        return bot.level().getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(12),
+        return bot.level().getEntitiesOfClass(LivingEntity.class, new AABB(p.blockPosition()).inflate(16),
                         e -> e instanceof Enemy && e.isAlive() && !CatchPokemonTask.isPokemon(e)
-                                && (e.distanceTo(p) < 4 || e.distanceTo(p) < 10 && p.hasLineOfSight(e)))
+                                && (e.distanceTo(p) < 4 || e.distanceTo(p) < 10 && p.hasLineOfSight(e)
+                                    // a drowned's trident reaches further than we'd look
+                                    || bot.huntedBy(e) && e.distanceTo(p) < 16))
                 .stream()
-                // pacifism keeps natural hostiles off us: leave them be, unless one just hurt us
-                .filter(e -> !bot.pacifism().atPeaceWith(e) || p.hurtTime > 0 && e.distanceTo(p) < 4)
+                // pacifism keeps natural hostiles off us: leave them be, unless one has hurt us
+                // (pacifism doesn't cover it after all) or something close just did
+                .filter(e -> !bot.pacifism().atPeaceWith(e) || bot.huntedBy(e) || p.hurtTime > 0 && e.distanceTo(p) < 4)
                 // neutral mobs leave us be until provoked: an enderman once it's screaming at us,
                 // anything else once it has hit us (a blood moon doesn't change that)
                 .filter(e -> !(e instanceof net.minecraft.world.entity.NeutralMob)
                         || (e instanceof net.minecraft.world.entity.monster.EnderMan em ? em.isCreepy() : e.getId() == bot.lastAttackerId))
-                .min(Comparator.comparingDouble(e -> e.distanceToSqr(p))).orElse(null);
+                .sorted(Comparator.comparingDouble(e -> e.distanceToSqr(p))).toList();
     }
 
-    private String wantedReflex(Bot bot) {
+    /** What to do about whatever is after us: "fight", "flee", "shelter", or null when nothing is. */
+    private String defend(Bot bot) {
         var p = bot.player();
-        BotConfig cfg = BotConfig.get();
-        // running out of air beats everything: a flooded hole kills faster than any mob
-        // diving for our own grave needs the breath: surface at a third, not at four fifths
-        double airFloor = "grave".equals(reflexKind) ? 0.35 : 0.8;
-        if (p.isUnderWater() && p.getAirSupply() < p.getMaxAirSupply() * airFloor) return "air";
         // a wild Pokémon that has turned on us stays angry until one of us dies (Cobblemon's anger
         // never wears off), and fliers keep up with a sprint: running only spreads the hits out. Fight
         // it. Someone's own Pokémon defending its owner is different: back off from that one.
@@ -464,9 +470,13 @@ public final class Brain {
             if (bot.pacifism().superBloodMoon() && !boom && t.distanceTo(p) > 3 && !WorldView.deepWater(p.blockPosition())
                     && !p.isUnderWater()) return "shelter";
             // hitting a mob pacifism still covers would turn its whole kin on us: walk away instead
-            if (weak || boom || bot.pacifism().fightingCosts(t)) return "flee";
+            // except one that is hunting us anyway: it won't stop at our bed, and finishing it within
+            // 15 s of the first swing costs only the 20 s grudge for a hit (pacifist-fabric's grace)
+            if (weak || boom || bot.pacifism().fightingCosts(t) && !bot.huntedBy(t)) return "flee";
             // a spawner's mob: another comes for each one killed while we're in range. Leave instead
             if (Spawners.near(t.blockPosition(), lol.zym.zymbot.civ.Pacifism.SPAWNED_RANGE) && t.distanceTo(p) > 2.5) return "flee";
+            // more than our kit (and the armed teammates beside us) can take on, or a trident
+            if (!FightOdds.canTake(bot, threats(bot))) return "flee";
             return "fight";
         }
         // hit by something we can't see: most likely another player
@@ -474,6 +484,37 @@ public final class Brain {
             Player attacker = bot.nearestOtherPlayer(6);
             if (attacker != null && !bot.isTeammate(attacker.getGameProfile().getName())) return "flee";
         }
+        return null;
+    }
+
+    /**
+     * Paused: no work, but a bot that just stands there gets killed. Once something hurts us, fight
+     * it or get away as we would running; then stand still again. True while that is going on.
+     */
+    public boolean guard(Bot bot) {
+        if (reflex == null) {
+            if (bot.ticks() - bot.lastHurtTick > 40) return false;
+            String want = defend(bot);
+            if ("shelter".equals(want)) want = "flee";
+            if (want == null) return false;
+            if (!Nav.configured()) Nav.configure();
+            bot.event("paused, but under attack: " + (want.equals("fight") ? "fighting back" : "getting away"));
+            reflex = makeReflex(bot, want);
+            reflexKind = want;
+        }
+        if (reflex.tick(bot) != Task.Status.RUNNING) stopAll(bot);
+        return true;
+    }
+
+    private String wantedReflex(Bot bot) {
+        var p = bot.player();
+        BotConfig cfg = BotConfig.get();
+        // running out of air beats everything: a flooded hole kills faster than any mob
+        // diving for our own grave needs the breath: surface at a third, not at four fifths
+        double airFloor = "grave".equals(reflexKind) ? 0.35 : 0.8;
+        if (p.isUnderWater() && p.getAirSupply() < p.getMaxAirSupply() * airFloor) return "air";
+        String defence = defend(bot);
+        if (defence != null) return defence;
         // out of deep water before anything slow (eating, a grave in the water is the exception)
         boolean deep = WorldView.deepWater(p.blockPosition());
         wetIdle = deep && !Nav.busy() ? wetIdle + 1 : 0;
@@ -563,6 +604,14 @@ public final class Brain {
                     bot.event("a spawner's " + t.getName().getString() + ": leaving its range");
                     yield new FleeTask(t, 32);
                 }
+                if (t != null && FightOdds.tridentDrowned(t)) {
+                    // it throws for 8 from ten blocks: out of its reach, not just a step back
+                    bot.event("a drowned with a trident at " + t.blockPosition().toShortString()
+                            + ": keeping away (taking one on needs two armed teammates)");
+                    yield new FleeTask(t, 24);
+                }
+                if (t != null && !FightOdds.canTake(bot, threats(bot)))
+                    bot.event("outmatched by " + threats(bot).size() + " hostile(s) led by " + t.getName().getString() + ": getting away");
                 Player pl = bot.nearestOtherPlayer(8);
                 yield new FleeTask(t != null ? t : pl != null ? pl : bot.player(), 16);
             }

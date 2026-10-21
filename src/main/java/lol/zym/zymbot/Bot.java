@@ -190,6 +190,21 @@ public final class Bot {
     /** Who or what last hurt us (entity id), for tasks that should back off from it. */
     public int lastAttackerId = -1;
     public long lastHurtTick = -1000;
+    /** Every mob that has hurt us lately (entity id, tick of its last hit), for {@link #huntedBy}. */
+    private final Map<Integer, Long> attackers = new HashMap<>();
+    private static final long HUNTED_TICKS = 20 * 60 * 5;
+
+    /**
+     * This mob has hurt us in the last five minutes: it's hunting us, whatever pacifism says.
+     * pacifist-fabric only covers mobs that arrived on their own (natural spawns, chunk generation,
+     * patrols, reinforcements). An ocean ruin's drowned (a structure spawn), a zombie that drowned in
+     * the river (a conversion) or a spawner's mob looks the same to us but hunts us all the same; the
+     * first hit is how we find out. A covered mob can't land one.
+     */
+    public boolean huntedBy(net.minecraft.world.entity.Entity e) {
+        Long at = attackers.get(e.getId());
+        return at != null && tick - at < HUNTED_TICKS;
+    }
 
     /** Health is spent money with regeneration off: say what took it. */
     private void noteDamage() {
@@ -201,6 +216,10 @@ public final class Bot {
                     ? src.getEntity().getName().getString() + " (" + src.type().msgId() + ")" : src.type().msgId();
             lastAttackerId = src != null && src.getEntity() != null ? src.getEntity().getId() : -1;
             lastHurtTick = tick;
+            if (src != null && src.getEntity() instanceof net.minecraft.world.entity.Mob m) {
+                attackers.values().removeIf(at -> tick - at > HUNTED_TICKS);
+                attackers.put(m.getId(), tick);
+            }
             event(String.format("hurt %.1f by %s, health %.1f", lastHealth - h, what, h));
             // a wild Pokémon that hits us stays angry until one of us dies: remember its kind
             if (src != null && src.getEntity() != null && lol.zym.zymbot.brain.tasks.CatchPokemonTask.isPokemon(src.getEntity())) {
@@ -584,6 +603,13 @@ public final class Bot {
             // paused isn't a reason to drown (a bot can rejoin underwater): keep its head up
             var pl = player();
             boolean sinking = pl.isInWater() && (pl.isUnderWater() || pl.getAirSupply() < pl.getMaxAirSupply());
+            if (downedSince == null) {
+                // nor to be killed: answer whatever attacks us, then stand still again. Bots join
+                // paused, and two respawned at their beds beside an ocean ruin's drowned and died
+                // there over and over, never hitting back
+                noteDamage();
+                if (brain.guard(this)) return;
+            }
             lol.zym.zymbot.control.Controls.jump(sinking);
             if (sinking && tick % 100 == 0) event("paused but in water: treading water");
             return;

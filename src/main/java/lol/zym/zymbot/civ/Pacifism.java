@@ -16,9 +16,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * pacifist-fabric on the server: players start as pacifists, and naturally spawned hostiles
- * neither target nor hurt them. Hitting a hostile turns its species (zombie and skeleton kin
- * count as one) against you for 20 s, killing one for 30 minutes. Some mobs never make peace,
+ * pacifist-fabric on the server: players start as pacifists, and hostiles that arrived on their
+ * own (natural spawns, chunk generation, patrols, reinforcements) neither target nor hurt them;
+ * structure, spawner and conversion spawns do (see {@link lol.zym.zymbot.Bot#huntedBy}). Hitting a
+ * hostile turns its species (zombie and skeleton kin count as one) against you for 20 s, killing
+ * one for 30 minutes, or 20 s if it dies within 15 s of the first swing. Some mobs never make peace,
  * and nothing does during a blood moon or in a village at night (the server's version 1.1.2).
  * We learn the state from {@code /pacifist status} and the server's alerts, and keep our own
  * estimate of grudges from what we hit.
@@ -28,13 +30,15 @@ public final class Pacifism {
 
     private static final Set<EntityType<?>> ZOMBIES = Set.of(EntityType.ZOMBIE, EntityType.HUSK, EntityType.DROWNED, EntityType.ZOMBIE_VILLAGER);
     private static final Set<EntityType<?>> SKELETONS = Set.of(EntityType.SKELETON, EntityType.STRAY, EntityType.BOGGED);
-    private static final long HIT_MS = 20_000, KILL_MS = 30 * 60_000L;
+    private static final long HIT_MS = 20_000, KILL_MS = 30 * 60_000L, GRACE_MS = 15_000;
     private static final Pattern ALERT = Pattern.compile("You (hit|killed) an? (.+?)! (?:(.+?) are now hostile|They're hostile) to you for (\\d+) ?(s|minutes)");
     private static final Pattern PEACE = Pattern.compile("You're at peace with (.+?) again");
     private static final Pattern MOON = Pattern.compile("During an? (Super )?Blood Moon:");
 
     private State state = State.UNKNOWN;
     private final Map<EntityType<?>, Long> grudges = new HashMap<>();
+    /** pacifist-fabric's engagement grace: a kill within 15 s of the first swing from peace costs a hit's grudge. */
+    private final Map<EntityType<?>, Long> graceUntil = new HashMap<>();
     private boolean bloodMoon, superMoon, inVillage;
     /** When we last heard the moon was up: the clock can lag the announcement by a moment. */
     private long moonSeenAt;
@@ -131,7 +135,12 @@ public final class Pacifism {
     /** We hit (or killed) this mob: its kin turn on us, whether or not the server tells us. */
     public void struck(Entity e, boolean killed) {
         if (!(e instanceof Monster) || alwaysHostile(e)) return;
-        long until = System.currentTimeMillis() + (killed ? KILL_MS : HIT_MS);
+        long now = System.currentTimeMillis();
+        // a blood moon leaves no grudges behind
+        if (bloodMoon()) return;
+        if (!killed && !grudged(e.getType())) for (EntityType<?> t : kin(e.getType())) graceUntil.put(t, now + GRACE_MS);
+        boolean forgiven = graceUntil.getOrDefault(e.getType(), 0L) > now;
+        long until = now + (killed && !forgiven ? KILL_MS : HIT_MS);
         for (EntityType<?> t : kin(e.getType())) grudges.merge(t, until, Math::max);
     }
 
