@@ -22,7 +22,7 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Fish from the bank of a pond or lake near {@code near}: food while the crops grow, and
- * CivFabric's Fishing skill (5 XP a catch). Casts at open water (3x3 at the surface, so never the
+ * CivFabric's Fishing skill (8 XP a catch). Casts at open water (3x3 at the surface, so never the
  * farm's irrigation blocks), reels in when the bobber says a fish is biting, and recasts. Stops
  * when {@code until} says so (a crop is ripe), after {@code maxMinutes}, or when the rod breaks.
  */

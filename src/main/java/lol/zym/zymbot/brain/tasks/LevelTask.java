@@ -102,6 +102,9 @@ public class LevelTask extends Task {
             if (!bot.civ().canMine(bot.memory(), e.getKey())) continue;
             // crops only pay when player-planted, and that's the farm's job
             if (clazz.equals("farmer") && !e.getKey().contains("berry") && !e.getKey().contains("leaves")) continue;
+            // CivFabric pricks below Journeyman Farmer, breaking a bush as well as picking it (20% at
+            // Novice, 8% at Apprentice), and lost health never comes back here: not worth the XP
+            if (b == net.minecraft.world.level.block.Blocks.SWEET_BERRY_BUSH && bot.civ().rank(bot.memory(), "farmer") < 2) continue;
             double cost = 6 + (Inv.canHarvest(b.defaultBlockState()) ? 0 : 20);
             options.add(new Option("breaking " + id.getPath(), e.getValue().xp() / cost,
                     () -> Inv.canHarvest(b.defaultBlockState()) ? new GatherTask(List.of(b), s -> true, Inv.count(s -> true) + 8)
