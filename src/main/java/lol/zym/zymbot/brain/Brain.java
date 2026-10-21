@@ -224,6 +224,10 @@ public final class Brain {
         }
 
         if (bot.role().autonomous()) {
+            for (Progression.Wait w : progression.newWaits()) {
+                bot.event(w.milestone().id() + " needs " + w.why() + ": waiting for the rank or a teammate");
+                askBoard(bot, ItemTarget.of(w.item(), w.count()));
+            }
             if (progress == null) {
                 milestone = progression.next();
                 if (milestone != null) {

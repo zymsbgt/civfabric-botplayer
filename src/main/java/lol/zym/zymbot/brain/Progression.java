@@ -26,8 +26,14 @@ public final class Progression {
     /** {@code wants}: what making it takes, for the shopping list to pick up on the way. */
     public record Milestone(String id, BooleanSupplier done, Function<Bot, Task> make, Map<Item, Integer> wants) {}
 
+    /** A milestone we can't do ourselves until a class rank comes (or a teammate brings the item). */
+    public record Wait(Milestone milestone, Item item, int count, String why) {}
+
     private final List<Milestone> ladder = new ArrayList<>();
     private final Map<String, Long> snoozed = new HashMap<>();
+    private final Map<String, Wait> waiting = new HashMap<>();
+    private final Map<String, Long> gateCheckedAt = new HashMap<>();
+    private final List<Wait> newWaits = new ArrayList<>();
 
     public Progression() {
         // ---- phase 1, everyone: something to eat ------------------------------------------
@@ -99,7 +105,9 @@ public final class Progression {
         add("iron_boots", () -> wearingOrHas(Items.IRON_BOOTS, Items.DIAMOND_BOOTS), b -> obtain(Items.IRON_BOOTS, 1), Map.of(Items.IRON_BOOTS, 1));
         add("poke_balls", () -> !BotConfig.get().catchPokemon || ItemTarget.parse("cobblemon:poke_ball", 1) == null
                         || Inv.find(CatchPokemonTask::isBall) >= 0,
-                b -> new ObtainTask(ItemTarget.parse("cobblemon:poke_ball", 8)));
+                b -> new ObtainTask(ItemTarget.parse("cobblemon:poke_ball", 8)),
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.ResourceLocation.parse("cobblemon:poke_ball"))
+                        .map(ball -> Map.of(ball, 8)).orElse(Map.of()));
         add("level_master", () -> levelled(4), b -> level(b));
         add("diamond_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 3, b -> obtain(Items.DIAMOND_PICKAXE, 1), Map.of(Items.DIAMOND_PICKAXE, 1));
         add("level_grandmaster", () -> levelled(5), b -> level(b));
@@ -456,17 +464,56 @@ public final class Progression {
             // the board, and asking again on every restart just churns the crafting table
             Long refused = b().memory().refusals.get("craft:minecraft:" + m.id());
             if (refused != null && now - refused < 3600_000L) continue;
+            // gated by a rank we haven't got: asked for once, then left until the rank or the item comes
+            if (gate(m) != null) continue;
             return m;
         }
         return null;
     }
 
-    /** The next {@code k} milestones still to do (snoozed ones included: their materials still help). */
+    /**
+     * What rank stands between us and a milestone, if any (rechecked every 30 s: the planner is
+     * not free). A newly gated one is queued for {@link #newWaits} so it's asked for once, not
+     * failed and re-posted every snooze.
+     */
+    private Wait gate(Milestone m) {
+        if (m.wants().isEmpty()) return null;
+        long now = System.currentTimeMillis();
+        Long at = gateCheckedAt.get(m.id());
+        if (at != null && now - at < 30_000L) return waiting.get(m.id());
+        gateCheckedAt.put(m.id(), now);
+        Wait w = null;
+        for (var e : m.wants().entrySet()) {
+            if (Inv.count(e.getKey()) >= e.getValue()) continue;
+            String why = b().planner().gate(e.getKey());
+            if (why != null) {
+                w = new Wait(m, e.getKey(), e.getValue(), why);
+                break;
+            }
+        }
+        Wait was = w == null ? waiting.remove(m.id()) : waiting.put(m.id(), w);
+        if (w != null && was == null) newWaits.add(w);
+        if (w == null && was != null) b().event(m.id() + ": no longer waiting on " + was.why());
+        return w;
+    }
+
+    /** Milestones that became gated since the last call: each wants one board post. */
+    public List<Wait> newWaits() {
+        if (newWaits.isEmpty()) return List.of();
+        List<Wait> out = new ArrayList<>(newWaits);
+        newWaits.clear();
+        return out;
+    }
+
+    /**
+     * The next {@code k} milestones still to do. Snoozed ones count (their materials still help);
+     * gated ones don't (iron for an iron pickaxe we may not craft is a teammate's errand).
+     */
     public List<Milestone> upcoming(int k) {
         List<Milestone> out = new ArrayList<>();
         for (Milestone m : ladder) {
             if (out.size() >= k) break;
-            if (!m.done().getAsBoolean()) out.add(m);
+            if (!m.done().getAsBoolean() && gate(m) == null) out.add(m);
         }
         return out;
     }
@@ -479,7 +526,9 @@ public final class Progression {
         List<String> out = new ArrayList<>();
         long now = System.currentTimeMillis();
         for (Milestone m : ladder) {
-            String s = m.done().getAsBoolean() ? "done" : snoozed.getOrDefault(m.id(), 0L) > now ? "snoozed" : "todo";
+            Wait w = waiting.get(m.id());
+            String s = m.done().getAsBoolean() ? "done" : w != null ? "waiting (" + w.why() + ")"
+                    : snoozed.getOrDefault(m.id(), 0L) > now ? "snoozed" : "todo";
             out.add(m.id() + ":" + s);
         }
         return out;

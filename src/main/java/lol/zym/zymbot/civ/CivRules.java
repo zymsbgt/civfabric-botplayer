@@ -113,6 +113,29 @@ public final class CivRules {
         return have < 0 || have >= need;
     }
 
+    /** Why {@link #canCraft} says no, as the server would put it ("Apprentice Blacksmith"), or null if it doesn't. */
+    public String craftNeeds(BotMemory mem, String recipeOrItemId) {
+        if (canCraft(mem, recipeOrItemId)) return null;
+        List<Req> reqs = recipeGate.get(recipeOrItemId);
+        if (reqs == null || reqs.isEmpty()) return "the server's leave"; // refused, gate unknown
+        return String.join(" or ", reqs.stream().map(r -> rankName(r.rank()) + " " + cap(r.clazz())).toList());
+    }
+
+    /** Why {@link #canMine} says no ("Journeyman Miner"), or null if it doesn't. */
+    public String mineNeeds(BotMemory mem, String blockId) {
+        if (canMine(mem, blockId)) return null;
+        Integer need = miningGate.get(blockId);
+        return need == null ? "the server's leave" : rankName(need) + " Miner";
+    }
+
+    private static String rankName(int rank) {
+        return cap(RANKS.get(Math.max(0, Math.min(rank, RANKS.size() - 1))));
+    }
+
+    private static String cap(String s) {
+        return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
+    }
+
     public boolean canUse(BotMemory mem, String blockId) {
         return !recentlyRefused(mem, "use:" + blockId) && meets(mem, blockGate.get(blockId));
     }

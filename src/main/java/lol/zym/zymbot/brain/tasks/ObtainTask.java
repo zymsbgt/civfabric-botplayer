@@ -110,7 +110,10 @@ public class ObtainTask extends Task {
             if (m == null) continue;
             if (best == null || m.cost() < best.cost()) best = m;
         }
-        if (best == null || best.cost() >= Planner.INF) return fail("no known way to get " + target.name());
+        if (best == null || best.cost() >= Planner.INF) {
+            String why = target.candidates().isEmpty() ? null : planner.gate(target.candidates().get(0));
+            return fail(why != null ? "needs " + why : "no known way to get " + target.name());
+        }
 
         int missing = target.count() - target.have();
         Task next = switch (best.kind()) {

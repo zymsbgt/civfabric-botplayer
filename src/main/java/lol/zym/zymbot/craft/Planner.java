@@ -86,6 +86,54 @@ public final class Planner {
         }
     }
 
+    /**
+     * The class rank that stands between us and an item we have no way to get, as "Apprentice
+     * Blacksmith to craft stone_shovel" or "Journeyman Miner to mine iron_ore" (a step down the
+     * chain). Null when there is a way, or when what's missing isn't a rank (no source known).
+     */
+    public String gate(Item item) {
+        return gate(item, 0, new HashSet<>());
+    }
+
+    private String gate(Item item, int depth, Set<Item> seen) {
+        if (depth > 3 || !seen.add(item) || Inv.has(item) || cost(item) < INF) return null;
+        String itemId = Inv.id(item), name = itemId.replace("minecraft:", "");
+        var civ = bot.civ();
+        var recipes = Recipes.craftingFor(item);
+        if (!recipes.isEmpty()) {
+            String own = civ.craftNeeds(bot.memory(), itemId);
+            if (own != null) return own + " to craft " + name;
+            List<RecipeHolder<CraftingRecipe>> open = recipes.stream().filter(h -> civ.canCraft(bot.memory(), h.id().toString())).toList();
+            if (open.isEmpty()) return civ.craftNeeds(bot.memory(), recipes.get(0).id().toString()) + " to craft " + name;
+            for (RecipeHolder<CraftingRecipe> h : open)
+                for (Recipes.Need n : Recipes.needs(h.value())) {
+                    String why = gate(n.ingredient(), depth, seen);
+                    if (why != null) return why;
+                }
+        }
+        for (RecipeHolder<SmeltingRecipe> h : Recipes.smeltingFor(item)) {
+            String why = gate(h.value().getIngredients().get(0), depth, seen);
+            if (why != null) return why;
+        }
+        List<Block> blocks = Sources.blocksFor(item);
+        if (!blocks.isEmpty() && blocks.stream().noneMatch(b -> civ.canMine(bot.memory(), BuiltInRegistries.BLOCK.getKey(b).toString()))) {
+            String id = BuiltInRegistries.BLOCK.getKey(blocks.get(0)).toString();
+            return civ.mineNeeds(bot.memory(), id) + " to mine " + id.replace("minecraft:", "");
+        }
+        return null;
+    }
+
+    /** An ingredient is only the blocker if none of its candidates can be had. */
+    private String gate(Ingredient ing, int depth, Set<Item> seen) {
+        List<Item> items = Arrays.stream(ing.getItems()).map(ItemStack::getItem).distinct().toList();
+        if (items.stream().anyMatch(it -> Inv.has(it) || cost(it) < INF)) return null;
+        for (Item it : items) {
+            String why = gate(it, depth + 1, seen);
+            if (why != null) return why;
+        }
+        return null;
+    }
+
     /** Cheapest candidate for an ingredient/target, with its method. */
     public Method bestOf(List<Item> candidates) {
         Method best = null;
