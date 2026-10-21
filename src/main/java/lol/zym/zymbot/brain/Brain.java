@@ -7,6 +7,7 @@ import lol.zym.zymbot.civ.Forecast;
 import lol.zym.zymbot.control.Controls;
 import lol.zym.zymbot.inv.Inv;
 import lol.zym.zymbot.nav.Nav;
+import lol.zym.zymbot.world.Spawners;
 import lol.zym.zymbot.world.WorldView;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -464,6 +465,8 @@ public final class Brain {
                     && !p.isUnderWater()) return "shelter";
             // hitting a mob pacifism still covers would turn its whole kin on us: walk away instead
             if (weak || boom || bot.pacifism().fightingCosts(t)) return "flee";
+            // a spawner's mob: another comes for each one killed while we're in range. Leave instead
+            if (Spawners.near(t.blockPosition(), lol.zym.zymbot.civ.Pacifism.SPAWNED_RANGE) && t.distanceTo(p) > 2.5) return "flee";
             return "fight";
         }
         // hit by something we can't see: most likely another player
@@ -555,6 +558,11 @@ public final class Brain {
                     yield new FleeTask(mon, 24);
                 }
                 LivingEntity t = threat(bot);
+                if (t != null && Spawners.near(t.blockPosition(), lol.zym.zymbot.civ.Pacifism.SPAWNED_RANGE)) {
+                    // far enough that the spawner goes quiet: it only spawns with a player within 16
+                    bot.event("a spawner's " + t.getName().getString() + ": leaving its range");
+                    yield new FleeTask(t, 32);
+                }
                 Player pl = bot.nearestOtherPlayer(8);
                 yield new FleeTask(t != null ? t : pl != null ? pl : bot.player(), 16);
             }

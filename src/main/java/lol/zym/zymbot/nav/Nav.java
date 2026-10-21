@@ -51,6 +51,9 @@ public final class Nav {
         s.autoTool.value = true;
         s.maxFallHeightNoWater.value = Math.max(2, cfg.maxFall);
         s.avoidance.value = true;
+        // spawners: what they make attacks pacifists, so paths give them a wide berth (Baritone's default is 2x)
+        s.mobSpawnerAvoidanceRadius.value = 16;
+        s.mobSpawnerAvoidanceCoefficient.value = 5.0;
         s.antiCheatCompatibility.value = true;
         s.renderPath.value = true;
         s.chatDebug.value = false;

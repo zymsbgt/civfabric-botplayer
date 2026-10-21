@@ -20,6 +20,11 @@ import java.util.*;
  * (buckets need Blacksmith 3), under open sky, where Realistic Plant Growth lets our seeds grow,
  * mark the plots round it and hand over to {@link FarmTask} to till and sow them. The spot
  * becomes home if we don't have one.
+ *
+ * <p>Not by a river or the sea if we can help it: drowned spawn in those biomes, and on a stormy
+ * night CivFabric lets them hunt pacifists and walks every one within 96 blocks toward the beds of a
+ * town. Our riverside base lost a bot to them again and again. A pond or lake inland comes first;
+ * a riverbank only once a couple of searches have found nothing else.
  */
 public class LayFieldTask extends Task {
     /** Plots one water block keeps wet: 4 out in every direction, at its own level. */
@@ -56,11 +61,12 @@ public class LayFieldTask extends Task {
             // the base a leader assigned us to, else our own home, else here
             BlockPos base = lol.zym.zymbot.brain.ClassPlan.teamHome(bot);
             BlockPos from = base != null ? base : bot.memory().home != null ? bot.memory().home.pos() : bot.player().blockPosition();
-            water = findSite(bot, from, crops);
+            boolean inland = explores < 2;
+            water = findSite(bot, from, crops, inland);
             // back from a walk to water we'd seen: look around here, not the base again (the base can
             // sit on a hill 60 blocks above its river). Far off, the base moves to the field
             if (water == null && explores > 0 && (bot.player().blockPosition().closerThan(from, 96) || mayMoveBase(bot)))
-                water = findSite(bot, bot.player().blockPosition(), crops);
+                water = findSite(bot, bot.player().blockPosition(), crops, inland);
             if (water == null) {
                 var shore = lol.zym.zymbot.memory.Landmarks.nearest(bot, "water"::equals, 200);
                 if (shore != null && !shore.at.pos().closerThan(bot.player().blockPosition(), 30) && explores < 3) {
@@ -83,7 +89,8 @@ public class LayFieldTask extends Task {
                 marked++;
             }
             mem.save();
-            bot.event("laying out a field of " + marked + " plots by the water at " + water.toShortString());
+            bot.event("laying out a field of " + marked + " plots by the water at " + water.toShortString()
+                    + (drownedWater(bot, water) ? " (river or sea: drowned come out of it on storm nights)" : ""));
         }
         setChild(bot, new FarmTask(water, WET, 6));
         return Status.RUNNING;
@@ -137,7 +144,18 @@ public class LayFieldTask extends Task {
         return out;
     }
 
-    private static BlockPos findSite(Bot bot, BlockPos from, List<Block> crops) {
+    /** River, ocean or beach within 16 blocks: where drowned spawn, checked every 8 blocks. */
+    static boolean drownedWater(Bot bot, BlockPos at) {
+        for (int dx = -16; dx <= 16; dx += 8)
+            for (int dz = -16; dz <= 16; dz += 8) {
+                var b = bot.level().getBiome(at.offset(dx, 0, dz));
+                if (b.is(net.minecraft.tags.BiomeTags.IS_RIVER) || b.is(net.minecraft.tags.BiomeTags.IS_OCEAN)
+                        || b.is(net.minecraft.tags.BiomeTags.IS_BEACH)) return true;
+            }
+        return false;
+    }
+
+    private static BlockPos findSite(Bot bot, BlockPos from, List<Block> crops, boolean inland) {
         BlockPos best = null;
         double bestScore = 0;
         boolean rules = PlantRules.active();
@@ -159,6 +177,10 @@ public class LayFieldTask extends Task {
                 if (!grows) continue;
             }
             double score = Math.min(plots.size(), PLOTS) - Math.sqrt(wp.distSqr(from)) / 6;
+            if (drownedWater(bot, wp)) {
+                if (inland) continue;
+                score -= 6;
+            }
             if (score > bestScore) {
                 bestScore = score;
                 best = wp;

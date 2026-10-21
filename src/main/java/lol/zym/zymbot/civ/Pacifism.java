@@ -139,8 +139,13 @@ public final class Pacifism {
     public boolean atPeaceWith(Entity e) {
         return protecting() && e instanceof Monster && !alwaysHostile(e) && !grudged(e.getType())
                 // CivFabric's stormy night: drowned hunt pacifists from 13000 to 23000 in a thunderstorm
-                && !(e instanceof Drowned && stormNight());
+                && !(e instanceof Drowned && stormNight())
+                // a spawner's mobs aren't natural spawns, and pacifism only covers those
+                && !lol.zym.zymbot.world.Spawners.near(e.blockPosition(), SPAWNED_RANGE);
     }
+
+    /** How far from a spawner a mob is taken for one of its own. Spawners place mobs within 4 blocks; they wander. */
+    public static final int SPAWNED_RANGE = 16;
 
     /** CivFabric's StormNight test: thunder between 13000 and 23000. */
     public static boolean stormNight() {

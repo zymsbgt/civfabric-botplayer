@@ -76,6 +76,8 @@ public final class BlockSearch {
                         long dx = m.getX() - origin.getX(), dz = m.getZ() - origin.getZ();
                         if (dx * dx + dz * dz > r2 || Math.abs(m.getY() - origin.getY()) > vertical) continue;
                         if (exclude != null && exclude.contains(m.asLong())) continue;
+                        // standing within 16 of a spawner wakes it, and pacifism doesn't cover what it makes
+                        if (Spawners.near(m, lol.zym.zymbot.civ.Pacifism.SPAWNED_RANGE)) continue;
                         found.add(m.immutable());
                     }
         }

@@ -228,6 +228,14 @@ public class GatherTask extends Task {
             bot.event("someone's build nearby: gathering " + label + " carefully from here");
             return Status.RUNNING;
         }
+        // Baritone's own mining doesn't skip a spawner's room: pick blocks ourselves (away from it) from here
+        if (mining && ticks % 20 == 0 && lol.zym.zymbot.world.Spawners.near(bot.player().blockPosition(), lol.zym.zymbot.civ.Pacifism.SPAWNED_RANGE)) {
+            Nav.stop();
+            mining = false;
+            careful = true;
+            bot.event("a spawner nearby: gathering " + label + " away from it");
+            return Status.RUNNING;
+        }
         if (!mining) {
             Nav.stop();
             mine.mine(blocks.toArray(new Block[0]));
