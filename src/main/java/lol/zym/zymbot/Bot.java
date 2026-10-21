@@ -399,7 +399,8 @@ public final class Bot {
             event("knocked out");
         } else if (text.contains("You're back on your feet") || text.contains("You bled out")) {
             downedSince = null;
-        } else if (text.contains("too hungry to rest") || text.contains("not enough night left")) {
+        } else if (text.contains("too hungry to rest") || text.contains("not enough night left")
+                || text.contains("woke up from a nightmare")) {
             brain.skipNight();
         }
     }

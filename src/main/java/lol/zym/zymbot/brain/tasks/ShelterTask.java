@@ -63,7 +63,7 @@ public class ShelterTask extends Task {
         var p = bot.player();
         if (!bot.pacifism().bloodMoon()) {
             if (phase == Phase.HOLD || phase == Phase.COVER || phase == Phase.DIG) to(Phase.OUT);
-            else return Status.SUCCESS;
+            else if (phase != Phase.OUT) return Status.SUCCESS; // still on our way: nothing to undo
         }
         if (child != null) {
             runChild(bot);

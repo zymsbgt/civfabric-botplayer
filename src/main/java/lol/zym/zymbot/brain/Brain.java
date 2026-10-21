@@ -395,6 +395,10 @@ public final class Brain {
                 .stream()
                 // pacifism keeps natural hostiles off us: leave them be, unless one just hurt us
                 .filter(e -> !bot.pacifism().atPeaceWith(e) || p.hurtTime > 0 && e.distanceTo(p) < 4)
+                // neutral mobs leave us be until provoked: an enderman once it's screaming at us,
+                // anything else once it has hit us (a blood moon doesn't change that)
+                .filter(e -> !(e instanceof net.minecraft.world.entity.NeutralMob)
+                        || (e instanceof net.minecraft.world.entity.monster.EnderMan em ? em.isCreepy() : e.getId() == bot.lastAttackerId))
                 .min(Comparator.comparingDouble(e -> e.distanceToSqr(p))).orElse(null);
     }
 
@@ -440,9 +444,17 @@ public final class Brain {
         boolean hurtForGood = bot.health().hurt(bot) && !bot.health().naturalRegen(bot);
         if ((!wet || food <= 3) && (food <= 14 || food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0) return "eat";
         if (!wet && hurtForGood && EatTask.chooseHealing(bot) >= 0) return "eat";
-        // a blood moon: every mob is after us until dawn. Go home and dig in, ahead of foraging,
-        // graves and errands (all of which mean walking about in the dark)
-        if (bot.pacifism().bloodMoon() && !wet) return "shelter";
+        // a blood moon: every mob is after us until dawn. Dig in, ahead of foraging, graves and
+        // errands (all of which mean walking about in the dark). CivFabric's night watch lets all but
+        // one of us sleep instead (the night isn't skipped), and a warm bed mends us: worth it when
+        // hurt and home is near. Not on a super one, when the whole horde marches on the town. Refused
+        // ("someone has to keep watch", monsters by the bed) or woken, we dig in after all
+        if (bot.pacifism().bloodMoon() && !wet) {
+            boolean rest = cfg.sleep && bot.memory().bedWarm && bot.health().hurt(bot) && !bot.pacifism().superBloodMoon()
+                    && System.currentTimeMillis() > noSleepUntil && bot.memory().bed != null && bot.dim().equals(bot.memory().bed.dim)
+                    && bot.memory().bed.pos().closerThan(p.blockPosition(), 48);
+            return rest ? "sleep" : "shelter";
+        }
         // hungry with nothing to eat: go and get food before anything else (CivFabric won't
         // even let us craft below 4)
         if (!wet && food <= 6 && EatTask.choose(bot) < 0 && System.currentTimeMillis() > noForageUntil) return "forage";
