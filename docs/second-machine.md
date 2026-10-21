@@ -77,6 +77,23 @@ hub, so the jar only has to be copied over once (the first version with the upda
 A bot with `autoUpdate` on runs whatever jar the hub serves, so the token is what keeps anyone
 else on the network from running code on that machine. Don't share it.
 
+## Without the hub
+
+Bots also talk over server chat. ZymLabs Rules carries a chat line 150 blocks, the team's own
+range, so a bot that can join the server can work with its team with no hub at all:
+
+- About once a minute each bot says a status line (`~zb st ...`: role, classes, position, fields,
+  bases), and each forecast reading of its own once (`~zb fc ...`). Teammates who hear it count it
+  as in range. Commands between bots are ordinary chat lines (`zb Bot2 come`).
+- Players nearby see these lines. `"chatRadio": false` turns it off and leaves the team on the hub.
+- `"hubUrl": "off"` runs a bot with no hub. It still works with its team; it has no job boards, no
+  updates from the hub, and Claude can't see or drive it except through a leader within 150 blocks
+  (`tell Bot3 start`).
+- Only names in `teammates` are listened to, and only when the name starts the chat line, so a
+  player can't type a line that passes for a bot's.
+
+The hub is still what Claude drives the leaders through, and where job boards and updates come from.
+
 ## If the server moves
 
 A bot keeps its memory (home, bed, chests, fields) per server address, and the hub keeps the team

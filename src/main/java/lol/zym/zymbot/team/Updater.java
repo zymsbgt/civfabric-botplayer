@@ -89,6 +89,10 @@ public final class Updater {
 
     private static void check() {
         if (jar == null || ownSha == null) return;
+        if (TeamBus.hubUrls().isEmpty()) {
+            status = "no hub to update from (hubUrl is off)";
+            return;
+        }
         Exception last = null;
         for (String base : TeamBus.hubUrls()) {
             try {

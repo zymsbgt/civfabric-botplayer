@@ -1,6 +1,7 @@
 package lol.zym.zymbot.team;
 
 import com.google.gson.*;
+import lol.zym.zymbot.Bot;
 import lol.zym.zymbot.BotConfig;
 import lol.zym.zymbot.ZymBotMod;
 import lol.zym.zymbot.memory.BotMemory;
@@ -20,8 +21,9 @@ import java.util.function.Consumer;
 /**
  * Client for the team hub ({@code hub/zymbot-hub.mjs}), which bots on any machine share.
  *
- * <p>The hub is the referee for the rule that bots more than 150 blocks apart can't
- * communicate: it only delivers messages, shows teammates and lets bots use job boards within
+ * <p>Bots also talk over server chat ({@link ChatRadio}), which needs no hub; teammates either
+ * way show up in {@link #inRange}. The hub is the referee for the rule that bots more than 150
+ * blocks apart can't communicate: it only delivers messages, shows teammates and lets bots use job boards within
  * range of their last reported position. This client never blocks the game thread; a
  * background loop publishes state and pulls the inbox and the "what's near me" view once a
  * second, and results are handed back on the client thread.
@@ -55,6 +57,7 @@ public final class TeamBus {
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private final String self;
+    private final ChatRadio radio = new ChatRadio();
     private final String server = BotMemory.serverKey();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
     private final ScheduledExecutorService loop = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -76,6 +79,11 @@ public final class TeamBus {
 
     public TeamBus(String self) {
         this.self = self;
+        if (hubUrls().isEmpty()) {
+            lastError = "no hub (hubUrl is off): the team talks over chat";
+            ZymBotMod.LOG.info("No team hub (server {}); radio over chat", server);
+            return;
+        }
         loop.scheduleWithFixedDelay(this::cycle, 500, 1000, TimeUnit.MILLISECONDS);
         ZymBotMod.LOG.info("Team hub {} (server {})", String.join(" or ", hubUrls()), server);
     }
@@ -142,10 +150,12 @@ public final class TeamBus {
         }
     }
 
-    /** The configured hub addresses, in the order to try them. */
+    /** The configured hub addresses, in the order to try them; none when hubUrl is "off". */
     static List<String> hubUrls() {
+        String cfg = BotConfig.get().hubUrl == null ? "" : BotConfig.get().hubUrl.strip();
+        if (cfg.equalsIgnoreCase("off") || cfg.equalsIgnoreCase("none")) return List.of();
         List<String> out = new ArrayList<>();
-        for (String u : BotConfig.get().hubUrl.split("[,\\s]+")) if (!u.isBlank()) out.add(u.replaceAll("/+$", ""));
+        for (String u : cfg.split("[,\\s]+")) if (!u.isBlank()) out.add(u.replaceAll("/+$", ""));
         return out.isEmpty() ? List.of("http://127.0.0.1:25599") : out;
     }
 
@@ -185,6 +195,13 @@ public final class TeamBus {
 
     /** Run a request off-thread; deliver the JSON (or an error object) on the client thread. */
     private void async(String path, JsonObject body, Consumer<JsonObject> done) {
+        if (hubUrls().isEmpty()) {
+            JsonObject out = new JsonObject();
+            out.addProperty("ok", false);
+            out.addProperty("error", lastError);
+            if (done != null) Minecraft.getInstance().execute(() -> done.accept(out));
+            return;
+        }
         loop.execute(() -> {
             JsonObject out;
             try {
@@ -229,18 +246,31 @@ public final class TeamBus {
         async("/send", o, done);
     }
 
-    /** Teammates the hub says are within radio range right now. */
+    /** The radio over server chat, which works with or without the hub. */
+    public ChatRadio radio() {
+        return radio;
+    }
+
+    /**
+     * Teammates within radio range right now: those the hub reports, and those heard on chat
+     * lately. The hub's view of one wins: it's a second old, a status line up to a minute.
+     */
     public List<Member> inRange() {
-        return nearby;
+        List<Member> out = new ArrayList<>(nearby);
+        for (Member m : radio.members(Bot.get())) {
+            if (out.stream().noneMatch(o -> o.name().equalsIgnoreCase(m.name()))) out.add(m);
+        }
+        return out;
     }
 
     /** Every bot name seen in range this session (for recognising names in chat). */
     public Collection<String> knownNames() {
+        for (Member m : radio.members(Bot.get())) everSeen.add(m.name());
         return everSeen;
     }
 
     public Optional<Member> member(String name) {
-        return nearby.stream().filter(m -> m.name().equalsIgnoreCase(name)).findFirst();
+        return inRange().stream().filter(m -> m.name().equalsIgnoreCase(name)).findFirst();
     }
 
     /** Job boards within range, nearest first, as the hub reports them. */

@@ -2,6 +2,7 @@ package lol.zym.zymbot.chat;
 
 import lol.zym.zymbot.Bot;
 import lol.zym.zymbot.BotConfig;
+import lol.zym.zymbot.team.ChatRadio;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 
 import java.util.ArrayList;
@@ -19,6 +20,13 @@ public final class ChatListener {
     private ChatListener() {}
 
     private static final Pattern NAME = Pattern.compile("^[^A-Za-z0-9_]*([A-Za-z0-9_]{3,16})\\W{1,4}\\s*(.+)$");
+    /**
+     * A radio line exactly as the server prints chat ("Bot2 » ~zb ...", "Bot2 >> ~zb ..." from ZymLabs
+     * Rules before 2026-10-21, or vanilla's "<Bot2> ~zb ..."):
+     * the sender has to be the very first thing on the line, so nobody can type a line that passes
+     * for a bot's.
+     */
+    private static final Pattern RADIO = Pattern.compile("^(?:<([A-Za-z0-9_]{3,16})>|([A-Za-z0-9_]{3,16}) (?:\u00bb|>>)) (" + ChatRadio.TAG + " .+)$");
 
     public static void register() {
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, ts) -> {
@@ -26,6 +34,8 @@ public final class ChatListener {
             if (bot == null) return;
             String name = sender != null ? sender.getName() : null;
             String body = signed != null ? signed.signedContent() : message.getString();
+            if (name != null && bot.team().radio().hear(bot, name, body)) return;
+            if (radio(bot, message.getString())) return;
             if (name == null) {
                 String[] parsed = split(message.getString(), bot);
                 if (parsed == null) return;
@@ -38,12 +48,20 @@ public final class ChatListener {
             Bot bot = Bot.get();
             if (bot == null) return;
             String text = message.getString();
+            if (!overlay && radio(bot, text)) return;
             bot.onServerMessage(text);
             if (!overlay) {
                 String[] parsed = split(text, bot);
                 if (parsed != null) bot.onChat(parsed[0], parsed[1]);
             }
         });
+    }
+
+    private static boolean radio(Bot bot, String text) {
+        Matcher m = RADIO.matcher(text);
+        if (!m.matches()) return false;
+        bot.team().radio().hear(bot, m.group(1) != null ? m.group(1) : m.group(2), m.group(3));
+        return true;
     }
 
     /**

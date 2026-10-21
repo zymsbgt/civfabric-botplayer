@@ -365,17 +365,32 @@ public final class Bot {
         else player().connection.sendChat(text);
     }
 
-    /** Send a command over the team radio to one bot or "all" within range (the hub enforces range). */
+    /**
+     * Send a command over the team radio to one bot or "all" within range: as a chat line (the server
+     * carries it 150 blocks), or through the hub (which enforces the same range) with chatRadio off.
+     */
     public String radio(String to, String text) {
-        if (!team.connected()) return "team hub unreachable: " + team.lastError();
         boolean all = to.equalsIgnoreCase("all") || to.equalsIgnoreCase("bots");
         if (!all && team.member(to).isEmpty())
             return to + " is out of radio range (" + BotConfig.get().commsRange + " blocks) or offline";
+        if (BotConfig.get().chatRadio) {
+            String target = all ? "all" : team.member(to).get().name();
+            team.radio().say("zb " + target + " " + text);
+            event("radio '" + text + "' -> " + target + " (chat)");
+            return "sending to " + target;
+        }
+        if (!team.connected()) return "team hub unreachable: " + team.lastError();
         team.send(all ? "all" : team.member(to).get().name(), text, null, r -> {
             if (r.has("sent")) event("radio '" + text + "' -> " + r.get("sent") + (r.has("dropped") && !r.getAsJsonArray("dropped").isEmpty() ? " dropped " + r.get("dropped") : ""));
             else event("radio failed: " + r.get("error"));
         });
         return "sending to " + to;
+    }
+
+    /** Named in our config's teammates: the only ones whose radio lines we take in. */
+    public boolean isConfiguredTeammate(String name) {
+        for (String t : BotConfig.get().teammates) if (t.equalsIgnoreCase(name)) return true;
+        return false;
     }
 
     public boolean isTeammate(String name) {
@@ -594,6 +609,7 @@ public final class Bot {
 
         if (tick % 40 == 0) publishState();
         if (tick % 10 == 0) handleRadio();
+        team.radio().tick(this);
         if (tick % 1200 == 0) memory.save();
         // right after joining the chunks may not be in yet, so keep looking until something shows up
         if (tick % 600 == 1 || surveyed.isEmpty() && tick % 40 == 0) survey();
