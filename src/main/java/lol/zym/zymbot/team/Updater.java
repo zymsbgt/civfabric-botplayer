@@ -31,7 +31,8 @@ import java.util.concurrent.TimeUnit;
  * serves, at startup, every half hour and on the "update" command. When it isn't ours, we download
  * it ({@code GET /mod}, with the hub token), check it against that hash, and leave it beside our jar
  * as {@code <jar>.update}, a name Fabric doesn't load. A running game can't replace its own jar, so
- * {@link Swap}, started once in a JVM of its own, waits for the game to close and copies it in. The
+ * {@link Swap}, started once in a JVM of its own (from a temporary copy, so a newer download can
+ * still replace {@code .update}), waits for the game to close and copies in whatever is there then. The
  * new version runs from the next launch; "update" closes the game straight away to get there.
  */
 public final class Updater {
@@ -116,9 +117,16 @@ public final class Updater {
                     ZymBotMod.LOG.warn("Update: {}", status);
                     return;
                 }
-                Path tmp = jar.resolveSibling(jar.getFileName() + ".part");
-                Files.write(tmp, body);
-                Files.move(tmp, update(), StandardCopyOption.REPLACE_EXISTING);
+                try {
+                    Path tmp = jar.resolveSibling(jar.getFileName() + ".part");
+                    Files.write(tmp, body);
+                    Files.move(tmp, update(), StandardCopyOption.REPLACE_EXISTING);
+                } catch (java.io.IOException e) {
+                    // the hub answered: this is our disk, not the network
+                    status = "couldn't save version " + want.substring(0, 12) + " beside our jar: " + e;
+                    ZymBotMod.LOG.warn("Update: {}", status);
+                    return;
+                }
                 staged = want;
                 if (!swapStarted) startSwap();
                 status = "version " + want.substring(0, 12) + " downloaded; installs when the game closes";
@@ -145,7 +153,11 @@ public final class Updater {
         String java = ProcessHandle.current().info().command().orElseThrow(() -> new IllegalStateException("can't find our java"));
         Path log = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("zymbot-update.log");
         Files.createDirectories(log.getParent());
-        new ProcessBuilder(java, "-cp", update().toString(), Swap.class.getName(),
+        // the helper runs from a copy of its own: Windows locks a jar on a running JVM's classpath, and
+        // a helper run from .update kept a newer version from being saved over it (found on Bot3)
+        Path helper = Files.createTempFile("zymbot-swap", ".jar");
+        Files.copy(update(), helper, StandardCopyOption.REPLACE_EXISTING);
+        new ProcessBuilder(java, "-cp", helper.toString(), Swap.class.getName(),
                 String.valueOf(ProcessHandle.current().pid()), update().toString(), jar.toString())
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
         swapStarted = true;
