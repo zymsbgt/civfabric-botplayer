@@ -71,6 +71,42 @@ public final class WorldView {
         return false;
     }
 
+    /**
+     * The bed is in a closed room: walk the air around it (anything a mob could walk or step through)
+     * and never reach the open sky or get more than 8 blocks out. Wooden doors count as gaps: on Hard,
+     * zombies break them. Fences, glass and iron doors hold.
+     */
+    public static boolean enclosed(BlockPos bed) {
+        BlockState st = state(bed);
+        if (!(st.getBlock() instanceof net.minecraft.world.level.block.BedBlock)) return false;
+        BlockPos other = bed.relative(net.minecraft.world.level.block.BedBlock.getConnectedDirection(st));
+        java.util.ArrayDeque<BlockPos> todo = new java.util.ArrayDeque<>(java.util.List.of(bed.above(), other.above()));
+        java.util.Set<BlockPos> seen = new java.util.HashSet<>(todo);
+        while (!todo.isEmpty()) {
+            BlockPos c = todo.poll();
+            if (!loaded(c) || Math.abs(c.getX() - bed.getX()) > 8 || Math.abs(c.getZ() - bed.getZ()) > 8
+                    || Math.abs(c.getY() - bed.getY()) > 4 || level().canSeeSky(c) || seen.size() > 3000) return false;
+            for (Direction d : Direction.values()) {
+                BlockPos n = c.relative(d);
+                if (seen.contains(n) || !mobGap(n)) continue;
+                seen.add(n);
+                todo.add(n);
+            }
+        }
+        return true;
+    }
+
+    /** A mob gets through (or steps over) this block. */
+    private static boolean mobGap(BlockPos pos) {
+        if (!loaded(pos)) return true;
+        BlockState s = state(pos);
+        if (s.is(net.minecraft.tags.BlockTags.WOODEN_DOORS)) return true;
+        if (s.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+                || s.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock) return false;
+        var shape = s.getCollisionShape(level(), pos);
+        return shape.isEmpty() || shape.max(Direction.Axis.Y) <= 0.6;
+    }
+
     public static Vec3 center(BlockPos pos) {
         return Vec3.atCenterOf(pos);
     }

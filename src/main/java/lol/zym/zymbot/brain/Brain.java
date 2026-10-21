@@ -127,6 +127,11 @@ public final class Brain {
             reflex = makeReflex(bot, want);
             reflexKind = want;
         }
+        // anything but sleep needs us up: shelter, a fight, running (the "Leave Bed" button)
+        if (reflex != null && !"sleep".equals(reflexKind) && bot.player().isSleeping()) {
+            bot.player().connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(
+                    bot.player(), net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.STOP_SLEEPING));
+        }
         if (reflex != null) {
             pause(bot, Layer.REFLEX);
             Task.Status s = reflex.tick(bot);
@@ -371,6 +376,20 @@ public final class Brain {
         };
     }
 
+    private long bedEnclosedAt = -1000;
+    private boolean bedEnclosed;
+
+    /** Our bed is in a closed room (asked every 10 s: walls don't change often). */
+    private boolean bedEnclosed(Bot bot) {
+        if (bot.ticks() - bedEnclosedAt >= 200) {
+            bedEnclosedAt = bot.ticks();
+            boolean was = bedEnclosed;
+            bedEnclosed = WorldView.loaded(bot.memory().bed.pos()) && WorldView.enclosed(bot.memory().bed.pos());
+            if (was != bedEnclosed) bot.event(bedEnclosed ? "our bed is walled and roofed" : "our bed is open to the night");
+        }
+        return bedEnclosed;
+    }
+
     /** The most hurt teammate within reach of our stitches. */
     private Player hurtTeammate(Bot bot) {
         var me = bot.player();
@@ -447,12 +466,14 @@ public final class Brain {
         // a blood moon: every mob is after us until dawn. Dig in, ahead of foraging, graves and
         // errands (all of which mean walking about in the dark). CivFabric's night watch lets all but
         // one of us sleep instead (the night isn't skipped), and a warm bed mends us: worth it when
-        // hurt and home is near. Not on a super one, when the whole horde marches on the town. Refused
-        // ("someone has to keep watch", monsters by the bed) or woken, we dig in after all
+        // hurt and home is near, but only in a walled, roofed room. The siege walks mobs to the beds,
+        // and a zombie woke a bot sleeping in the open with two hits (14 health to 5). Not on a super
+        // one, when the whole horde marches on the town. Refused ("someone has to keep watch",
+        // monsters by the bed) or woken, we dig in after all
         if (bot.pacifism().bloodMoon() && !wet) {
             boolean rest = cfg.sleep && bot.memory().bedWarm && bot.health().hurt(bot) && !bot.pacifism().superBloodMoon()
                     && System.currentTimeMillis() > noSleepUntil && bot.memory().bed != null && bot.dim().equals(bot.memory().bed.dim)
-                    && bot.memory().bed.pos().closerThan(p.blockPosition(), 48);
+                    && bot.memory().bed.pos().closerThan(p.blockPosition(), 48) && bedEnclosed(bot);
             return rest ? "sleep" : "shelter";
         }
         // hungry with nothing to eat: go and get food before anything else (CivFabric won't
