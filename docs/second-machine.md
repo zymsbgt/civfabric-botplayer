@@ -56,6 +56,25 @@ They join paused. Claude starts them through the hub, gives them the team's base
 (`teamhome set main 76 63 376`), and they walk there and take the next free roles (Delver, then
 Scholar).
 
+## 6. Updates from the hub
+
+With `"autoUpdate": true` in a copy's `zymbot.json`, that bot takes new versions of the mod from the
+hub, so the jar only has to be copied over once (the first version with the updater in it).
+
+- The hub serves the newest `build/libs/zymbot-<version>.jar` on the main Mac, or the file named
+  by `ZYMBOT_HUB_MOD`. Like everything else on the hub, it needs the token.
+- The bot checks at startup and every half hour. A new jar is downloaded next to the old one as
+  `zymbot-0.1.0.jar.update`, checked against the hub's SHA-256, and copied in once the game has
+  closed. The old one is kept as `zymbot-0.1.0.jar.bak`. The new version runs from the next launch.
+- `update` (sent through the hub or in chat) does it straight away: the bot downloads the new jar
+  and closes the game. Launch it again to run the new version. `update check` downloads without
+  closing; `update status` (or `version`) says what it's running.
+- The swap's log is `logs/zymbot-update.log`. To go back a version, close the game and rename
+  `.bak` to `.jar`.
+
+A bot with `autoUpdate` on runs whatever jar the hub serves, so the token is what keeps anyone
+else on the network from running code on that machine. Don't share it.
+
 ## If they can't reach the hub
 
 - From the second machine, open `http://192.168.0.3:25599/leaders?server=x` in a browser. Without

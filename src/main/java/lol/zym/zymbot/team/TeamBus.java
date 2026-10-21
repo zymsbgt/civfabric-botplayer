@@ -143,7 +143,7 @@ public final class TeamBus {
     }
 
     /** The configured hub addresses, in the order to try them. */
-    private static List<String> hubUrls() {
+    static List<String> hubUrls() {
         List<String> out = new ArrayList<>();
         for (String u : BotConfig.get().hubUrl.split("[,\\s]+")) if (!u.isBlank()) out.add(u.replaceAll("/+$", ""));
         return out.isEmpty() ? List.of("http://127.0.0.1:25599") : out;

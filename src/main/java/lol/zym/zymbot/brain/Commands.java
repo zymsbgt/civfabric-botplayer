@@ -58,6 +58,7 @@ public final class Commands {
             "teamhome | teamhome set <name> [x y z] [purpose] | assign <name> | remove <name>  (leaders only: the team's bases)",
             "say <text> | tell <bot|all> <command>  (bots within 150 blocks only)",
             "board | board create <name> | board chest | post <item> <n> [to <name>|chest] | cancel <post>",
+            "update [check|status] (autoUpdate: install the hub's jar, closing the game; check only downloads it)",
             "append 'loop' to repeat a job");
 
     /** What grows where the bot stands, under Realistic Plant Growth, and how its own seeds would do. */
@@ -334,6 +335,16 @@ public final class Commands {
                 }
                 case "forecast", "moon" -> {
                     return lol.zym.zymbot.civ.Forecast.command(bot, from, a);
+                }
+                case "update", "version" -> {
+                    // update: take the hub's jar and close the game to install it; check: download only
+                    if (cmd.equals("version") || a.length > 1 && a[1].equalsIgnoreCase("status"))
+                        return lol.zym.zymbot.team.Updater.status();
+                    if (!BotConfig.get().autoUpdate) return "autoUpdate is off in config/zymbot.json";
+                    boolean quit = !(a.length > 1 && a[1].equalsIgnoreCase("check"));
+                    lol.zym.zymbot.team.Updater.checkNow(quit);
+                    return quit ? "asking the hub for a new version; if there is one I'll close the game to install it"
+                            : "asking the hub for a new version; it installs when the game next closes";
                 }
                 case "sethome" -> {
                     bot.memory().home = new BotMemory.Pos(bot.player().blockPosition(), bot.dim());

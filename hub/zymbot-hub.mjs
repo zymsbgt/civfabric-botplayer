@@ -9,7 +9,8 @@
 // No dependencies. Run:   ZYMBOT_HUB_TOKEN=secret node hub/zymbot-hub.mjs
 // Env: ZYMBOT_HUB_PORT (25599), ZYMBOT_HUB_HOST (0.0.0.0), ZYMBOT_HUB_TOKEN (required for non-local
 //      hosts; connections from this machine itself don't need it), ZYMBOT_RANGE (150),
-//      ZYMBOT_HUB_DATA (hub-data.json next to this file)
+//      ZYMBOT_HUB_DATA (hub-data.json next to this file),
+//      ZYMBOT_HUB_MOD (the mod jar bots with autoUpdate take; default the newest build/libs/zymbot-*.jar)
 
 import http from "node:http";
 import fs from "node:fs";
@@ -26,6 +27,8 @@ const ONLINE_MS = 15_000;
 const CLAIM_TTL_MS = 20 * 60_000;
 const OFFLINE_RELEASE_MS = 2 * 60_000; // a claimer offline this long loses its share
 const INBOX_CAP = 200;
+const MOD = process.env.ZYMBOT_HUB_MOD || "";
+const LIBS = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "build", "libs");
 
 if (!TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
   console.error("Refusing to listen on " + HOST + " without ZYMBOT_HUB_TOKEN. Set a token, or ZYMBOT_HUB_HOST=127.0.0.1 for local-only.");
@@ -317,6 +320,29 @@ function send(sv, body) {
   return { ok: targets.length > 0, id, sent: targets, dropped };
 }
 
+// ---- mod updates ---------------------------------------------------------------------
+
+/** The jar bots with autoUpdate should run: ZYMBOT_HUB_MOD, else the newest zymbot-<version>.jar the build left. */
+function modPath() {
+  if (MOD) return MOD;
+  const jars = fs.readdirSync(LIBS).filter((f) => /^zymbot-[\d.]+\.jar$/.test(f))
+    .map((f) => path.join(LIBS, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  if (!jars.length) throw new Error("no zymbot jar in " + LIBS);
+  return jars[0];
+}
+
+let modCache = null;
+/** The jar's bytes and SHA-256, read again whenever the file changes (a build mid-write is caught by the bot's hash check). */
+function mod() {
+  const file = modPath();
+  const st = fs.statSync(file);
+  if (!modCache || modCache.file !== file || modCache.mtime !== st.mtimeMs || modCache.size !== st.size) {
+    const bytes = fs.readFileSync(file);
+    modCache = { file, mtime: st.mtimeMs, size: bytes.length, bytes, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
+  }
+  return modCache;
+}
+
 // ---- http ----------------------------------------------------------------------------
 
 function authorized(req) {
@@ -351,6 +377,16 @@ const httpServer = http.createServer(async (req, res) => {
   };
   if (!authorized(req)) return reply(401, { ok: false, error: "bad token" });
   try {
+    // the mod jar, for bots with autoUpdate on: behind the token like everything else
+    if (req.method === "GET" && url.pathname === "/mod/info") {
+      const m = mod();
+      return reply(200, { ok: true, name: path.basename(m.file), size: m.size, sha256: m.sha256, built: new Date(m.mtime).toISOString() });
+    }
+    if (req.method === "GET" && url.pathname === "/mod") {
+      const m = mod();
+      res.writeHead(200, { "content-type": "application/java-archive", "content-length": m.size, "x-sha256": m.sha256 });
+      return res.end(m.bytes);
+    }
     const sv = server(url.searchParams.get("server") || req.headers["x-zymbot-server"]);
     const as = url.searchParams.get("as");
     if (req.method === "POST" && url.pathname === "/state") {

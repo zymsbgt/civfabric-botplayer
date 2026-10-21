@@ -54,6 +54,14 @@ public final class BotConfig {
     public String hubToken = "";
 
     /**
+     * Take new versions of this mod from the hub: checked at startup, every half hour and on the
+     * "update" command. A new jar is downloaded beside this one, checked against the hub's SHA-256,
+     * and swapped in once the game has closed, so it runs from the next launch. Off by default: it
+     * runs whatever jar the hub serves, so only turn it on for a hub of your own, behind its token.
+     */
+    public boolean autoUpdate = false;
+
+    /**
      * Radio range shown in messages. The hub enforces the real limit (ZYMBOT_RANGE, default 150,
      * matching ZymLabs local chat): bots further apart, or in different dimensions, can't talk.
      */

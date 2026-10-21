@@ -46,6 +46,7 @@ public final class ZymBotMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         BotConfig.load();
+        lol.zym.zymbot.team.Updater.start();
         toggle = KeyBindingHelper.registerKeyBinding(new KeyMapping("key.zymbot.toggle", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "key.categories.zymbot"));
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> mc.execute(() -> {
