@@ -31,7 +31,8 @@ import java.util.Set;
  * few: a status line about once a minute ("st"), each forecast reading of our own once ("fc"), each
  * forecast trust decision once ("tr"). Commands to teammates are ordinary "zb Bot2 come" lines. A
  * status line heard makes its sender a teammate in range, with the fields the rest of the bot reads
- * from a hub member (role, classes, bases, fields, forecasts), until it goes quiet.
+ * from a hub member (role, classes, bases, fields, forecasts), until it goes quiet. Lines count from
+ * the names in our teammates list and from bots the hub has shown us.
  *
  * <p>Vanilla kicks a player for more than about one chat line a second, and the bot also sends
  * commands (/bed, /pacifist...) through the same counter: lines go out one every two seconds.
@@ -134,7 +135,8 @@ public final class ChatRadio {
     /** A line of ours from teammate {@code from} (the server's "Name » text"); true if it was one. */
     public boolean hear(Bot bot, String from, String text) {
         if (!text.startsWith(TAG + " ")) return false;
-        if (from.equalsIgnoreCase(bot.name()) || !bot.isConfiguredTeammate(from)) return true;
+        // named in our teammates, or vouched for by the hub (which only lets in bots with its token)
+        if (from.equalsIgnoreCase(bot.name()) || !bot.isConfiguredTeammate(from) && !bot.team().hubKnows(from)) return true;
         String[] w = text.split(" ", 3);
         if (w.length < 3) return true;
         try {

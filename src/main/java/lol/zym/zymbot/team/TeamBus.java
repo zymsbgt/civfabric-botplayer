@@ -68,6 +68,8 @@ public final class TeamBus {
     private final ConcurrentLinkedQueue<Message> inbox = new ConcurrentLinkedQueue<>();
     private final LinkedHashSet<String> seen = new LinkedHashSet<>();
     private final Set<String> everSeen = ConcurrentHashMap.newKeySet();
+    /** Bots the hub has shown us: they had the hub's token, so they're the team's. */
+    private final Set<String> hubSeen = ConcurrentHashMap.newKeySet();
     private volatile JsonObject pendingState;
     private volatile List<Member> nearby = List.of();
     private volatile List<JsonObject> boards = List.of();
@@ -128,6 +130,7 @@ public final class TeamBus {
                     JsonObject o = e.getAsJsonObject();
                     ms.add(new Member(o.get("name").getAsString(), o));
                     everSeen.add(o.get("name").getAsString());
+                    hubSeen.add(o.get("name").getAsString().toLowerCase(java.util.Locale.ROOT));
                 }
                 nearby = ms;
                 List<JsonObject> bs = new ArrayList<>();
@@ -267,6 +270,11 @@ public final class TeamBus {
     public Collection<String> knownNames() {
         for (Member m : radio.members(Bot.get())) everSeen.add(m.name());
         return everSeen;
+    }
+
+    /** Whether the hub has shown us this bot this session. */
+    public boolean hubKnows(String name) {
+        return hubSeen.contains(name.toLowerCase(java.util.Locale.ROOT));
     }
 
     public Optional<Member> member(String name) {
