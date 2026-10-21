@@ -483,10 +483,11 @@ public final class Progression {
     /** Next milestone to work on, or null when everything reachable is done. */
     /**
      * Milestones a bot too hurt to risk anything may still work on: the ones that heal it (bed,
-     * campfire) and quiet work at home. No hunting, mining or long walks.
+     * campfire), the claim that makes its bed a respawn point (a hurt bot is the likeliest to die),
+     * and quiet work at home. No hunting, mining or long walks.
      */
     private static final java.util.Set<String> SAFE = java.util.Set.of("crafting_table", "rejoin", "wooden_sword", "furnace", "cook_meat",
-            "wooden_hoe", "seeds", "farm", "share_seeds", "storage", "stash", "bed", "settle", "warm_bed");
+            "wooden_hoe", "seeds", "farm", "share_seeds", "storage", "stash", "bed", "settle", "claim_bed", "warm_bed");
 
     public Milestone next() {
         return next(false);

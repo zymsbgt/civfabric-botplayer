@@ -571,7 +571,9 @@ public final class Commands {
                 return new CatchPokemonTask();
             }
             case "sleep" -> {
-                return bot.memory().bed == null ? null : new SleepTask(bot.memory().bed.pos());
+                // "sleep claim": just click it, which claims it at any hour (a claimed bed is our respawn point)
+                boolean claim = a.length > 1 && a[1].equalsIgnoreCase("claim");
+                return bot.memory().bed == null ? null : new SleepTask(bot.memory().bed.pos(), claim);
             }
             case "settle" -> {
                 return new SettleTask();
