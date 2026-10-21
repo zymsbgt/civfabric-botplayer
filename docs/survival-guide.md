@@ -41,15 +41,18 @@ Things marked **?** are inferred from code and need confirming on the server.
    server blocks their damage ✔.
    - **Grudges.** Hitting a hostile turns its kin against you for 20 s, and killing one for 30
      minutes. Zombies, husks, drowned and zombie villagers count as one kin; so do skeletons, strays
-     and bogged.
+     and bogged. Your own Pokémon's hits count as yours. Dying clears every grudge.
    - **War.** `/pacifist disable` declares war on everything, for at least 5 minutes. It pays ×2.5
      XP.
    - **Always hostile, whatever your status:** blazes, wither skeletons, guardians and elder
      guardians, the Warden, illagers (except wandering patrols), ravagers and piglin brutes.
-   - **Not covered:** mobs that weren't naturally spawned (spawners, `/summon`, eggs) can still hurt
-     you.
-   - **Pacifism is suspended during blood moons, and in villages at night.** The server says
-     "You're entering a village. Monsters & Pillagers may attack you."
+   - **Not covered:** mobs that weren't naturally spawned can still hurt you. That means spawners
+     and trial spawners, jockeys, skeleton traps, raids, `/summon` and eggs. Keep out of a
+     spawner's 16-block range: it only spawns while a player is that close.
+   - **Pokémon are never covered.** Species that defend themselves attack whoever hurt them.
+   - **Pacifism is suspended during blood moons, and in villages at night** (monsters except
+     creepers). The server says "You're entering a village. Monsters & Pillagers may attack you."
+   - **Stormy nights:** drowned ignore pacifism. See [Mobs, nights and the moon](#mobs-nights-and-the-moon).
    - **No pigs or hoglins spawn.** Pork comes from the butcher.
 5. **Spice of Fabric remembers your last 11 meals** ✔. Each repeat of a food restores 0.7× the hunger
    and takes 1.3× as long to eat. Bread eaten 11 times takes about 28 s and restores almost
@@ -176,22 +179,32 @@ craft. Classless players craft those without the hunger cost.
 - **Endermen hunt skybases.** That means anyone above y 79 with 11 or more blocks of air below,
   within 64 blocks of an enderman.
 - **Phantoms** come after insomnia: about 7 days without sleep.
-- **Storms.** During a storm, anything flying in the open is struck by lightning every 90–480 s.
-  On a "Stormy Night of the Drowned", drowned come ashore hungry and ignore pacifism.
+- **Lightning.** Out in the rain with 8 or more blocks of air below you (flying, or on a pillar or
+  bridge), lightning can strike you for 5 to 100 damage, through armour.
+- **Stormy nights.** A thunderstorm between 13000 and 23000 is a "Stormy Night of the Drowned"
+  (the server announces "The Stormy Night of the Drowned begins..."). Drowned ignore pacifism, and
+  every drowned within 96 blocks of a town is walked toward it. A thundering day is not one, and
+  neither is plain rain. Drowned spawn in rivers and oceans, so a base by a river is the worst place
+  to be: put the farm by a pond or lake inland.
 - **Moons** (Enhanced Celestials, pack defaults):
 
 | Moon | Chance a night | Effect |
 |---|---|---|
-| Blood moon | 10%, 4+ nights apart | ×2.25 monsters, all on the surface; no sleeping; **CivFabric siege**; big class XP bonus; death costs 20% XP |
-| Super blood moon | 5% on full moons, 20+ nights apart | ×4.5 monsters; siege; class XP up to ×16; death costs 5% XP |
+| Blood moon | 10%, 4+ nights apart | ×2.25 monsters, all on the surface; nothing is at peace; **CivFabric siege** (drowned only); big class XP bonus; death costs 20% XP |
+| Super blood moon | 5% on full moons, 20+ nights apart | ×4.5 monsters; siege by every hostile; zombies, skeletons, spiders and creepers get ×1.75 speed and ×2 health; class XP up to ×16; death costs 5% XP |
 | Harvest moon | 10% | ×2 crop drops; +12% CivFabric harvest chance |
 | Super harvest moon | 5% (full moons) | ×4 crop drops, +100% harvest chance |
 | Blue moon | 10% | Luck; enchanting and anvils at half cost; beacons ×1.5 range; vanilla XP ×1.2 |
 | Super blue moon | 5% (full moons) | Luck V; enchanting and anvils at a quarter cost; beacons ×2; vanilla XP ×2 |
 
-- **Sieges.** On blood moons, mobs within 48 blocks march on towns, and 25% of them are armed. Zombies
-  dig through walls up to 12 blocks thick at a third of a player's speed. A town is 3 or more claimed
-  beds within 64 blocks.
+- **Sleeping is allowed on blood moons** (the server's datapack overrides Enhanced Celestials).
+- **Rain calls a moon off** while it lasts: pacifism is back under a rained-out blood moon. When the
+  sky clears the moon returns, and CivFabric announces "During a Blood Moon:" with its XP rates.
+  The same notice greets anyone who joins under a moon.
+- **Sieges.** On a blood moon, mobs within 48 blocks march on towns, and 25% of them are armed. On an
+  ordinary blood moon only drowned march; on a super one, every hostile does. Zombies dig through
+  walls up to 12 blocks thick at a third of a player's speed. A town is 3 or more claimed beds within
+  64 blocks.
 - **Forecasts.** `/lunarforecast` reads tonight's moon, and `/guesslunarforecast` names a coming night
   for Librarian or Hunter XP: 160 base, ×5 with a Lunar Forecast Scroll. Scrolls come from village
   libraries and cartographers, shipwrecks and galleons, or wandering traders (8 emeralds).
@@ -204,7 +217,7 @@ craft. Classless players craft those without the hunger cost.
 - **Downed.** You bleed out after 60 s. Anyone can revive you with a first aid kit; stitches and
   medkits revive better with Medic rank.
 - **Graves.** Your things stay where you died. If there's no room for a grave, they scatter on the
-  ground.
+  ground. A grave can be placed in lava: don't go back into fire or lava for one.
 - **Beds.** Sleeping claims a bed, and resting heals. You may not rest if nobody keeps watch, and you
   can't rest while too hungry. Breaking someone's bed is announced.
 - **Reinforcement** has 3 tiers, and a reinforced block takes far longer to break; the bots already
@@ -244,7 +257,8 @@ CivFabric farming:
 2. **Get there over land.** There are no boats, so swim only short gaps, and carry food for swimming
    hunger. Travel by day, in clear weather, and not on a blood moon.
 3. **Make it a town:** 3 or more claimed beds within 64 blocks. That gives `/tpa` reach and a base,
-   but it also makes the place a siege target. So, before the first blood moon:
+   but it also makes the place a siege target, and on stormy nights drowned within 96 blocks are
+   walked toward it. Settle away from rivers and the sea. So, before the first blood moon:
    - build walls thick enough to slow diggers, or keep the beds well inside;
    - keep a lit, enclosed perimeter;
    - keep everyone home on blood moons.
@@ -307,19 +321,24 @@ first.
    - they read `/pacifist status` and the grudge alerts, and leave alone the hostiles pacifism keeps
      off them;
    - they walk away rather than anger a whole kin;
-   - they fight normally on blood moons and in villages at night.
+   - they fight normally on blood moons and in villages at night;
+   - spawner mobs and storm-night drowned count as hostile. They walk away from a spawner's mobs,
+     and paths and gathering keep 16 blocks from spawners (2026-10-21).
 2. ~~They treat health as renewable~~. **Fixed** ✔:
-   - they notice health isn't regenerating (after 30 s well fed with no gain);
-   - they then flee at 12 health, and rest near home at 10 or below while radioing `heal <me>`;
+   - on CivFabric they never count on health coming back;
+   - they flee at 12 health, and rest near home at 10 or below while radioing `heal <me>`;
    - they eat golden apples and other healing food when hurt;
    - they put a campfire by their bed (`warm_bed` milestone, `campfire` command);
-   - bots carrying stitches, a medkit or wound mush treat hurt teammates within 16 blocks.
-     Treating other players is **not yet tested**: it needs a second player.
+   - a Medic treats hurt teammates with stitches, a medkit or a first aid kit. Anyone else only
+     applies wound mush, or hands over a healing food, a healing potion or a spare bed;
+   - they sleep at night only when hurt, since the night isn't skipped and a healthy bot in bed
+     just loses the night's work.
 3. ~~The progression ladder assumes vanilla~~. **Built 2026-10-20, not yet tested on a fresh
    world:** food, then farms, then classes, with team roles and the drain priced in. See
    [class-progression.md](class-progression.md).
 4. ~~Crafting hunger~~. The planner prices every craft in food, and won't craft at 4 or below.
-5. **Blood moons.** Don't try to sleep. Get inside walls or away from towns, and hold off on deaths.
+5. ~~Blood moons~~. **Fixed** ✔: on blood moons and stormy nights they dig in, or, if hurt, sleep in
+   a walled, warm bed. Hold off on deaths.
 6. **Forecast guesses** are free XP every night for Librarians and Hunters.
 7. **Swimming costs 15× walking hunger.** That's another reason to path around water. Exploring
    now heads for dry land (2026-10-20), after a bot looking for wood swam 400 blocks out to sea.
@@ -329,6 +348,7 @@ first.
 
 - **Overrides.** Does the server override any of these defaults: classes, moon chances, plant growth?
 - **Drain.** Which way does the drain flow, exactly?
-- **Pacifism.** Which mobs ignore it: spawners, raids, bosses?
+- ~~**Pacifism.** Which mobs ignore it?~~ Answered from the source (2026-10-21): see
+  [rule 4](#the-rules-that-matter-most) and [Mobs, nights and the moon](#mobs-nights-and-the-moon).
 - **Pearls.** Can ender pearls be bought from clerics, or only looted from endermen?
 - **Fire charges.** Are they gated? They aren't in the recipe table.
