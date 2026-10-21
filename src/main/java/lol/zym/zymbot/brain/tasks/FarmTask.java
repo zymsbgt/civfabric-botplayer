@@ -65,6 +65,7 @@ public class FarmTask extends Task {
     private final Map<BlockPos, Integer> skip = new HashMap<>();
     private boolean replantOff;
     private boolean tillOff;
+    private int hoeTries;
     private Item offhandWas;
     private int sinceSweep;
     private int harvested, sown, tilled;
@@ -252,6 +253,13 @@ public class FarmTask extends Task {
             case TILL -> {
                 int hoe = bestHoe();
                 if (hoe < 0) {
+                    // the hoe broke mid-field: make another (twice at most) rather than idle out the shift
+                    if (hoeTries++ < 2 && bot.planner().cost(net.minecraft.world.item.Items.WOODEN_HOE) < lol.zym.zymbot.craft.Planner.INF) {
+                        tell(bot, "hoe broke: making another");
+                        job = null;
+                        setChild(bot, new ObtainTask(lol.zym.zymbot.craft.ItemTarget.of(net.minecraft.world.item.Items.WOODEN_HOE, 1)));
+                        return Status.RUNNING;
+                    }
                     tillOff = true;
                     tell(bot, "need a hoe to re-till the field");
                     job = null;

@@ -320,7 +320,7 @@ public final class Progression {
     /** Every class in our role at {@code rank} or better. */
     private static boolean levelled(int rank) {
         Bot bot = b();
-        if (!foodSecure(bot)) return true; // skipped (not done) until the food phase is over
+        if (!foodSecure(bot)) return false; // and deferred() keeps it waiting until the food phase is over
         List<String> plan = ClassPlan.classes(bot);
         if (plan.isEmpty()) return true;
         for (String c : plan) {
@@ -465,7 +465,7 @@ public final class Progression {
             Long refused = b().memory().refusals.get("craft:minecraft:" + m.id());
             if (refused != null && now - refused < 3600_000L) continue;
             // gated by a rank we haven't got: asked for once, then left until the rank or the item comes
-            if (gate(m) != null) continue;
+            if (gate(m) != null || deferred(m) != null) continue;
             return m;
         }
         return null;
@@ -497,6 +497,11 @@ public final class Progression {
         return w;
     }
 
+    /** Why a milestone isn't to be started yet, or null: levelling classes waits for the farm. */
+    private static String deferred(Milestone m) {
+        return m.id().startsWith("level_") && !foodSecure(b()) ? "until food is secure" : null;
+    }
+
     /** Milestones that became gated since the last call: each wants one board post. */
     public List<Wait> newWaits() {
         if (newWaits.isEmpty()) return List.of();
@@ -513,7 +518,7 @@ public final class Progression {
         List<Milestone> out = new ArrayList<>();
         for (Milestone m : ladder) {
             if (out.size() >= k) break;
-            if (!m.done().getAsBoolean() && gate(m) == null) out.add(m);
+            if (!m.done().getAsBoolean() && gate(m) == null && deferred(m) == null) out.add(m);
         }
         return out;
     }
@@ -527,7 +532,8 @@ public final class Progression {
         long now = System.currentTimeMillis();
         for (Milestone m : ladder) {
             Wait w = waiting.get(m.id());
-            String s = m.done().getAsBoolean() ? "done" : w != null ? "waiting (" + w.why() + ")"
+            String d = deferred(m);
+            String s = m.done().getAsBoolean() ? "done" : d != null ? "waiting (" + d + ")" : w != null ? "waiting (" + w.why() + ")"
                     : snoozed.getOrDefault(m.id(), 0L) > now ? "snoozed" : "todo";
             out.add(m.id() + ":" + s);
         }
