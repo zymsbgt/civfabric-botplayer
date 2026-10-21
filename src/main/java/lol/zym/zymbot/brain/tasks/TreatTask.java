@@ -37,8 +37,12 @@ public class TreatTask extends Task {
         return "Treat " + patient.getGameProfile().getName();
     }
 
-    public static int treatmentSlot() {
-        for (String id : TREATMENTS) {
+    /**
+     * What we may treat a teammate with: a Medic anything on the list, anyone else only wound mush
+     * (stitches and kits are a Medic's job; the rest of us hand over a consumable or a bed instead).
+     */
+    public static int treatmentSlot(Bot bot) {
+        for (String id : lol.zym.zymbot.brain.ClassPlan.isMedic(bot) ? TREATMENTS : List.of("civfabric:wound_mush")) {
             int slot = Inv.find(s -> BuiltInRegistries.ITEM.getKey(s.getItem()).toString().equals(id));
             if (slot >= 0) return slot;
         }
@@ -76,7 +80,7 @@ public class TreatTask extends Task {
             return Status.RUNNING;
         }
         Nav.stop();
-        int slot = treatmentSlot();
+        int slot = treatmentSlot(bot);
         if (slot < 0 || !Inv.select(slot)) return fail("nothing to treat with");
         ItemStack held = Inv.held();
         String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();

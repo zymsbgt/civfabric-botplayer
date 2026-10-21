@@ -31,6 +31,7 @@ public final class Pacifism {
     private static final long HIT_MS = 20_000, KILL_MS = 30 * 60_000L;
     private static final Pattern ALERT = Pattern.compile("You (hit|killed) an? (.+?)! (?:(.+?) are now hostile|They're hostile) to you for (\\d+) ?(s|minutes)");
     private static final Pattern PEACE = Pattern.compile("You're at peace with (.+?) again");
+    private static final Pattern MOON = Pattern.compile("During an? (Super )?Blood Moon:");
 
     private State state = State.UNKNOWN;
     private final Map<EntityType<?>, Long> grudges = new HashMap<>();
@@ -65,7 +66,10 @@ public final class Pacifism {
 
     /** Learn from a server message; true if it was about pacifism. */
     public boolean onMessage(String text) {
-        if (text.contains("Blood Moon\" rises")) {
+        // Enhanced Celestials' own line, or CivFabric's "During a Blood Moon:" notice, which also goes out
+        // when a moon rained out at dusk comes back once the sky clears, and to anyone joining under one
+        Matcher moon = MOON.matcher(text);
+        if (text.contains("Blood Moon\" rises") || moon.find()) {
             bloodMoon = true;
             superMoon = text.contains("Super Blood Moon");
             moonSeenAt = System.currentTimeMillis();
@@ -133,7 +137,17 @@ public final class Pacifism {
 
     /** Pacifism keeps this mob off us, so leave it alone (and hitting it would cost us). */
     public boolean atPeaceWith(Entity e) {
-        return protecting() && e instanceof Monster && !alwaysHostile(e) && !grudged(e.getType());
+        return protecting() && e instanceof Monster && !alwaysHostile(e) && !grudged(e.getType())
+                // CivFabric's stormy night: drowned hunt pacifists from 13000 to 23000 in a thunderstorm
+                && !(e instanceof Drowned && stormNight());
+    }
+
+    /** CivFabric's StormNight test: thunder between 13000 and 23000. */
+    public static boolean stormNight() {
+        var l = lol.zym.zymbot.world.WorldView.level();
+        if (l == null) return false;
+        long t = l.getDayTime() % 24000L;
+        return l.isThundering() && t >= 13000 && t < 23000;
     }
 
     /** Fighting this one would anger its whole kin (it isn't already hostile to us). */
@@ -141,10 +155,19 @@ public final class Pacifism {
         return atPeaceWith(e);
     }
 
-    /** A blood moon is up: nothing is at peace with anyone until dawn. */
+    /**
+     * A blood moon is up: nothing is at peace with anyone until dawn. Rain calls it off while it
+     * lasts (pacifist-fabric asks Enhanced Celestials what is happening, not what was scheduled),
+     * and it's back when the sky clears.
+     */
     public boolean bloodMoon() {
         protecting(); // drops the moon once it's day
-        return bloodMoon;
+        return bloodMoon && !rainedOut();
+    }
+
+    private static boolean rainedOut() {
+        var l = lol.zym.zymbot.world.WorldView.level();
+        return l != null && l.isRaining();
     }
 
     /**
@@ -158,9 +181,9 @@ public final class Pacifism {
     /** Pacifism is on and in force: not suspended by a blood moon or a village at night. */
     public boolean protecting() {
         // it's day: the moon has set (but not on a clock that hasn't caught up with the announcement yet)
-        if (bloodMoon && lol.zym.zymbot.world.WorldView.level().getDayTime() % 24000 < 12000
+        if (bloodMoon && lol.zym.zymbot.world.WorldView.level() != null && lol.zym.zymbot.world.WorldView.level().getDayTime() % 24000 < 12000
                 && System.currentTimeMillis() - moonSeenAt > 60_000) bloodMoon = superMoon = false;
-        return state == State.ON && !bloodMoon && !inVillage;
+        return state == State.ON && !(bloodMoon && !rainedOut()) && !inVillage;
     }
 
     public boolean grudged(EntityType<?> t) {
@@ -198,7 +221,7 @@ public final class Pacifism {
     public String describe() {
         long now = System.currentTimeMillis();
         StringBuilder sb = new StringBuilder(state.name().toLowerCase(Locale.ROOT));
-        if (state == State.ON && !protecting()) sb.append(" (suspended: ").append(bloodMoon ? (superMoon ? "super blood moon" : "blood moon") : "village at night").append(")");
+        if (state == State.ON && !protecting()) sb.append(" (suspended: ").append(bloodMoon() ? (superMoon ? "super blood moon" : "blood moon") : "village at night").append(")");
         grudges.forEach((t, until) -> {
             if (until > now) sb.append(", ").append(BuiltInRegistries.ENTITY_TYPE.getKey(t).getPath()).append(" hostile ").append((until - now) / 1000).append("s");
         });

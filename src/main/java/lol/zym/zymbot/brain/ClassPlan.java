@@ -43,6 +43,11 @@ public final class ClassPlan {
         return null;
     }
 
+    /** Medic is in our class plan: stitches and kits are ours to use on others. */
+    public static boolean isMedic(Bot bot) {
+        return classes(bot).contains("medic");
+    }
+
     /** The classes we're levelling, best first. Empty only before a role is chosen. */
     public static List<String> classes(Bot bot) {
         List<String> pinned = BotConfig.get().classes;

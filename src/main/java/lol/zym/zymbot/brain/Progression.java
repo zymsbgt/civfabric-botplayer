@@ -81,6 +81,8 @@ public final class Progression {
                 b -> new SleepTask(b.memory().bed.pos(), true));
         // CivFabric: a bed only heals with a campfire beside it, and health comes back no other way
         add("warm_bed", () -> b().memory().bed == null || b().memory().bedWarm, b -> new WarmBedTask());
+        // food to last a few days away from the farm: 80 hunger points each (raw meat at its cooked worth)
+        add("provisions", () -> foodPoints() >= FOOD_POINTS, Progression::provision);
         // nothing past here until the team can feed itself
         add("food_secure", () -> foodSecure(b()), Progression::feedTheTeam);
 
@@ -114,6 +116,25 @@ public final class Progression {
     }
 
     // ---- phases --------------------------------------------------------------------------
+
+    /** Hunger points of food every bot should carry. */
+    public static final int FOOD_POINTS = 80;
+
+    /** Hunger points of the safe food we carry, each at the game's own value, raw meat as cooked. */
+    public static int foodPoints() {
+        int n = 0;
+        for (int i = 0; i < 36; i++) {
+            ItemStack s = lol.zym.zymbot.inv.Diet.asEaten(Inv.inv().getItem(i));
+            if (Inv.food(s) != null && !Inv.riskyFood(s)) n += lol.zym.zymbot.inv.Diet.baseHunger(s) * s.getCount();
+        }
+        return n;
+    }
+
+    /** The Grower takes its provisions from the farm; everyone else hunts and forages. */
+    private static Task provision(Bot bot) {
+        if (ClassPlan.isGrower(bot) && bot.memory().home != null && farmPlots(bot) > 0) return new FarmTask(bot.memory().home.pos(), 10, 8);
+        return food(bot);
+    }
 
     /** Planted plots that make a farm worth calling one. */
     public static final int FARM_PLOTS = 16;

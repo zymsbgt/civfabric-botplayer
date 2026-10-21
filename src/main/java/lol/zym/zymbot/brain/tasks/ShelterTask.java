@@ -30,6 +30,9 @@ import java.util.Set;
  * on every side to be placed against. Only when the base is close and nothing has found us yet do we
  * walk home first (a bot that walked home through a Super Blood Moon died on the way, every time);
  * otherwise we dig in where we stand. With no spot to dig, stand by the base with the team.
+ *
+ * <p>Also a thunderstorm night, when CivFabric lets drowned ignore pacifism: they killed a bot at
+ * full health by the river in 25 s. Out again when the storm or the night ends.
  */
 public class ShelterTask extends Task {
     private enum Phase { GO, PICK, WALK, DIG, COVER, HOLD, OUT }
@@ -39,10 +42,27 @@ public class ShelterTask extends Task {
     private final Set<BlockPos> bad = new HashSet<>();
     private int phaseTicks;
     private BlockPos digging;
+    private boolean danger(Bot bot) {
+        return bot.pacifism().bloodMoon() || stormNight(bot);
+    }
+
+    /**
+     * Thunder between 13000 and 23000, CivFabric's own test (StormNight.isStormNight): drowned hunt
+     * pacifists then. Not {@link WorldView#isNight()}, which counts any thunderstorm as night (beds
+     * work in one), so a thundering afternoon would send everyone into the ground.
+     */
+    public static boolean stormNight(Bot bot) {
+        long t = bot.level().getDayTime() % 24000L;
+        return bot.level().isThundering() && t >= 13000 && t < 23000;
+    }
+
+    private String why(Bot bot) {
+        return bot.pacifism().bloodMoon() ? "blood moon" : "storm night";
+    }
 
     @Override
     public String name() {
-        return "Shelter from the blood moon (" + phase.name().toLowerCase() + ")";
+        return "Shelter from the " + (phase == Phase.GO ? "night" : "storm or moon") + " (" + phase.name().toLowerCase() + ")";
     }
 
     private void to(Phase p) {
@@ -61,7 +81,7 @@ public class ShelterTask extends Task {
     protected Status onTick(Bot bot) {
         phaseTicks++;
         var p = bot.player();
-        if (!bot.pacifism().bloodMoon()) {
+        if (!danger(bot)) {
             if (phase == Phase.HOLD || phase == Phase.COVER || phase == Phase.DIG) to(Phase.OUT);
             else if (phase != Phase.OUT) return Status.SUCCESS; // still on our way: nothing to undo
         }
@@ -77,7 +97,7 @@ public class ShelterTask extends Task {
                 if (!walk || b.closerThan(p.blockPosition(), 10) || phaseTicks > 20 * 60) {
                     Nav.stop();
                     if (!walk && b != null && !b.closerThan(p.blockPosition(), 10))
-                        bot.event("blood moon: " + (bot.pacifism().superBloodMoon() ? "a super one" : "too far from home or under attack")
+                        bot.event(why(bot) + ": " + (bot.pacifism().superBloodMoon() ? "a super one" : "too far from home or under attack")
                                 + "; digging in here");
                     to(Phase.PICK);
                 } else if (phaseTicks % 40 == 1) Nav.goNear(b, 4);
@@ -85,7 +105,7 @@ public class ShelterTask extends Task {
             case PICK -> {
                 spot = pickSpot(p.blockPosition());
                 if (spot == null) {
-                    bot.event("blood moon: nowhere to dig in here; staying by the base");
+                    bot.event(why(bot) + ": nowhere to dig in here; staying by the base");
                     to(Phase.HOLD);
                 } else to(Phase.WALK);
             }
@@ -126,13 +146,13 @@ public class ShelterTask extends Task {
             case COVER -> {
                 BlockPos cover = spot.below();
                 if (!WorldView.passable(cover)) {
-                    bot.event("blood moon: dug in at " + spot.below(3).toShortString() + " until dawn");
+                    bot.event(why(bot) + ": dug in at " + spot.below(3).toShortString() + " until dawn");
                     to(Phase.HOLD);
                     break;
                 }
                 Item block = coverBlock();
                 if (block == null || phaseTicks > 20 * 15) {
-                    bot.event("blood moon: couldn't cover the pit; waiting in it");
+                    bot.event(why(bot) + ": couldn't cover the pit; waiting in it");
                     to(Phase.HOLD);
                     break;
                 }
@@ -168,7 +188,7 @@ public class ShelterTask extends Task {
                 // dawn: take the cover off and climb out (Baritone pillars up from the pit)
                 if (spot == null || p.blockPosition().getY() >= spot.getY()) {
                     Nav.stop();
-                    bot.event("blood moon over; out of the shelter");
+                    bot.event("dawn: out of the shelter");
                     return Status.SUCCESS;
                 }
                 if (!WorldView.passable(spot.below())) {

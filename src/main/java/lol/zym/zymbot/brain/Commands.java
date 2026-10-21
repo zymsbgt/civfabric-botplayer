@@ -288,6 +288,10 @@ public final class Commands {
                 }
                 case "grave" -> {
                     // point the bot at a grave of its own to empty (one it forgot), or list the ones it knows
+                    if (a.length == 2 && a[1].equalsIgnoreCase("forget")) {
+                        bot.forgetGraves();
+                        return "leaving every grave where it is";
+                    }
                     if (a.length < 4) {
                         if (bot.memory().graves.isEmpty()) return "no graves to recover";
                         StringBuilder sb = new StringBuilder("graves: ");
@@ -386,8 +390,9 @@ public final class Commands {
                     if (bot.memory().bed == null) return "no bed yet: settle first";
                 }
                 case "heal", "treat" -> {
-                    if (lol.zym.zymbot.brain.tasks.TreatTask.treatmentSlot() < 0) return "nothing to treat with (stitches, medkit, wound mush)";
                     String who = a.length > 1 ? a[1] : from;
+                    if (build(bot, from, a) == null) return ClassPlan.isMedic(bot) ? "nothing to heal " + who + " with"
+                            : "not a medic, and no wound mush, healing food or potion, or spare bed for " + who;
                     if (who == null || bot.level().players().stream().noneMatch(o -> o.getGameProfile().getName().equalsIgnoreCase(who) && o != bot.player()))
                         return "can't see " + who + " to treat";
                 }
@@ -417,6 +422,19 @@ public final class Commands {
                 if (t == null) return null;
                 int n = a.length > 2 ? Integer.parseInt(a[2]) : 1;
                 return new ObtainTask(t.withCount(t.have() + n));
+            }
+            case "feed" -> {
+                // a hungry teammate: half our biggest pile of safe food, 8 at most, so we keep some
+                if (a.length < 2) return null;
+                Map<net.minecraft.world.item.Item, Integer> piles = new HashMap<>();
+                for (int i = 0; i < 36; i++) {
+                    var s = Inv.inv().getItem(i);
+                    if (Inv.isFood(s) && !Inv.riskyFood(s)) piles.merge(s.getItem(), s.getCount(), Integer::sum);
+                }
+                var best = piles.entrySet().stream().max(Map.Entry.comparingByValue()).orElse(null);
+                if (best == null) return null;
+                int n = Math.min(8, (best.getValue() + 1) / 2);
+                return new GiveTask(a[1].equalsIgnoreCase("me") ? from : a[1], ItemTarget.of(best.getKey(), n));
             }
             case "give", "bring" -> {
                 if (a.length < 3) return null;
@@ -504,11 +522,18 @@ public final class Commands {
                 return bot.memory().bed == null ? null : new WarmBedTask();
             }
             case "heal", "treat" -> {
-                // heal <player>: a teammate asked for stitches
+                // heal <player> [bed]: a teammate is hurt. A Medic treats; anyone may apply wound mush,
+                // or hand over a healing food or potion, or a spare bed if they've none
                 String who = a.length > 1 ? a[1] : from;
-                if (TreatTask.treatmentSlot() < 0) return null;
                 var target = bot.level().players().stream().filter(o -> o.getGameProfile().getName().equalsIgnoreCase(who)).findFirst().orElse(null);
-                return target == null || target == bot.player() ? null : new TreatTask(target);
+                if (target == null || target == bot.player()) return null;
+                if (TreatTask.treatmentSlot(bot) >= 0) return new TreatTask(target);
+                int slot = Inv.find(Inv::healingItem);
+                if (slot >= 0) return new GiveTask(who, ItemTarget.of(Inv.inv().getItem(slot).getItem(), 1));
+                boolean wantsBed = a.length > 2 && a[2].equalsIgnoreCase("bed");
+                int bed = Inv.find(s -> s.is(net.minecraft.tags.ItemTags.BEDS));
+                if (wantsBed && bed >= 0 && bot.memory().bed != null) return new GiveTask(who, ItemTarget.of(Inv.inv().getItem(bed).getItem(), 1));
+                return null;
             }
             case "home" -> {
                 BotMemory.Pos h = bot.memory().home != null ? bot.memory().home : bot.memory().bed;

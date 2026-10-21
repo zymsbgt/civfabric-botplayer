@@ -263,6 +263,16 @@ public final class Inv {
                 || e.effect().getEffect().equals(net.minecraft.world.effect.MobEffects.HEAL));
     }
 
+    /** Something a hurt teammate can use on themselves: healing food (hearty soup too) or a healing/regeneration potion, splash or not. */
+    public static boolean healingItem(ItemStack s) {
+        if (healingFood(s)) return true;
+        var pc = s.get(DataComponents.POTION_CONTENTS);
+        if (pc == null) return false;
+        for (var e : pc.getAllEffects())
+            if (e.getEffect().equals(net.minecraft.world.effect.MobEffects.HEAL) || e.getEffect().equals(net.minecraft.world.effect.MobEffects.REGENERATION)) return true;
+        return false;
+    }
+
     public static boolean riskyFood(ItemStack s) {
         FoodProperties f = food(s);
         if (f == null) return true;

@@ -209,7 +209,8 @@ public final class Brain {
             }
             if (bot.ticks() >= nextHealCall && !bot.team().inRange().isEmpty()) {
                 nextHealCall = bot.ticks() + 20 * 120;
-                bot.radio("all", "heal " + bot.name());
+                // "bed" too when we have none: a spare bed is help anyone can give
+                bot.radio("all", "heal " + bot.name() + (bot.memory().bed == null && Inv.find(s -> s.is(net.minecraft.tags.ItemTags.BEDS)) < 0 ? " bed" : ""));
             }
             if (idle.tick(bot) != Task.Status.RUNNING) {
                 idle.stop(bot);
@@ -509,11 +510,22 @@ public final class Brain {
         // a grave trip is a long walk: not unarmed (unless it's close), the progression makes a sword first
         if (bot.pendingGrave() != null && (Inv.armed() || bot.pendingGrave().closerThan(p.blockPosition(), 48))) return "grave";
         if (bot.receiving()) return "receive";
-        if (System.currentTimeMillis() > noTreatUntil && TreatTask.treatmentSlot() >= 0) {
+        if (System.currentTimeMillis() > noTreatUntil && TreatTask.treatmentSlot(bot) >= 0) {
             patient = hurtTeammate(bot);
             if (patient != null) return "treat";
         }
+        // a thunderstorm night: CivFabric's drowned ignore pacifism and come out of every river (they
+        // took a bot at full health in 25 s). A hurt bot sleeps it off in a walled warm bed; the rest dig in
+        if (!wet && ShelterTask.stormNight(bot)) {
+            boolean rest = cfg.sleep && bot.memory().bedWarm && bot.health().hurt(bot) && System.currentTimeMillis() > noSleepUntil
+                    && bot.memory().bed != null && bot.dim().equals(bot.memory().bed.dim)
+                    && bot.memory().bed.pos().closerThan(p.blockPosition(), 48) && bedEnclosed(bot);
+            return rest ? "sleep" : "shelter";
+        }
+        // to heal, not to pass the night: CivFabric's night watch doesn't skip it, so a healthy bot
+        // in bed just loses the night's work
         if (cfg.sleep && WorldView.isNight() && bot.memory().bed != null && System.currentTimeMillis() > noSleepUntil
+                && bot.health().hurt(bot)
                 && bot.memory().bed.pos().closerThan(p.blockPosition(), 128) && bot.dim().equals(bot.memory().bed.dim))
             return "sleep";
         // something on the shopping list a few steps away: pick it up on the way. Only between our
@@ -557,7 +569,8 @@ public final class Brain {
             case "eat" -> new EatTask();
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
             case "shelter" -> {
-                bot.event("blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "") + ": taking shelter until dawn");
+                bot.event((bot.pacifism().bloodMoon() ? "blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "") : "storm night: drowned are hunting")
+                        + ": taking shelter until dawn");
                 yield new ShelterTask();
             }
             case "air" -> {
@@ -582,6 +595,8 @@ public final class Brain {
             case "forage" -> {
                 noForageUntil = System.currentTimeMillis() + 90_000; // if the hunt fails, don't retry at once
                 bot.event("hungry with no food; hunting");
+                // and ask: a teammate stood beside a starving bot with food in its pack
+                if (!bot.team().inRange().isEmpty()) bot.radio("all", "feed " + bot.name());
                 yield Progression.food(bot);
             }
             case "sleep" -> new SleepTask(bot.memory().bed.pos());

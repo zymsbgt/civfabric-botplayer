@@ -552,6 +552,13 @@ public final class Bot {
         memory.save();
     }
 
+    /** Leave every grave where it is. */
+    public void forgetGraves() {
+        memory.graves.clear();
+        pendingGrave = null;
+        memory.save();
+    }
+
     public void addGrave(BlockPos at) {
         memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().equals(at));
         memory.graves.add(new BotMemory.Pos(at, dim()));

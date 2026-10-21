@@ -39,6 +39,9 @@ public class RecoverGraveTask extends Task {
             return s == Status.SUCCESS && grave == null && search == null ? Status.SUCCESS : Status.RUNNING;
         }
         if (ticks > 20 * 60 * 5) return fail("gave up on grave");
+        // a grave in lava or fire: we die in it again (a bot burned twice going back for one)
+        if ((bot.player().isOnFire() || bot.player().isInLava()) && bot.player().blockPosition().closerThan(death, 24))
+            return fail("our grave at " + death.toShortString() + " is in fire or lava; leaving it");
         if (grave == null) {
             if (!bot.player().blockPosition().closerThan(death, 24)) {
                 Nav.goNear(death, 3);
