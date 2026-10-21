@@ -28,6 +28,16 @@ public class RecoverGraveTask extends Task {
         return "Recover grave " + death.toShortString();
     }
 
+    /** Lava or fire around where we died (a floor of it below counts): whatever killed us there is still there. */
+    private static boolean burning(BlockPos at) {
+        for (BlockPos p : BlockPos.betweenClosed(at.offset(-4, -3, -4), at.offset(4, 2, 4))) {
+            var st = WorldView.state(p);
+            if (st.getFluidState().is(net.minecraft.tags.FluidTags.LAVA) || st.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)
+                return true;
+        }
+        return false;
+    }
+
     private static boolean isGrave(net.minecraft.world.level.block.state.BlockState s) {
         return BuiltInRegistries.BLOCK.getKey(s.getBlock()).equals(GRAVE);
     }
@@ -40,8 +50,15 @@ public class RecoverGraveTask extends Task {
         }
         if (ticks > 20 * 60 * 5) return fail("gave up on grave");
         // a grave in lava or fire: we die in it again (a bot burned twice going back for one)
-        if ((bot.player().isOnFire() || bot.player().isInLava()) && bot.player().blockPosition().closerThan(death, 24))
+        if ((bot.player().isOnFire() || bot.player().isInLava()) && bot.player().blockPosition().closerThan(death, 24)) {
+            bot.markHazard(death);
             return fail("our grave at " + death.toShortString() + " is in fire or lava; leaving it");
+        }
+        // and look before going: Bot4 walked into the lava by two of its graves before it found out
+        if (WorldView.loaded(death) && burning(death)) {
+            bot.markHazard(death);
+            return fail("our grave at " + death.toShortString() + " is by lava or fire; leaving it");
+        }
         if (grave == null) {
             if (!bot.player().blockPosition().closerThan(death, 24)) {
                 Nav.goNear(death, 3);

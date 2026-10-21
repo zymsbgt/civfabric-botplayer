@@ -190,6 +190,8 @@ public final class Bot {
     /** Who or what last hurt us (entity id), for tasks that should back off from it. */
     public int lastAttackerId = -1;
     public long lastHurtTick = -1000;
+    /** What last hurt us ("lava", "onFire", "mob"...): a death takes its cause from it. */
+    private String lastHurtBy;
     /** Every mob that has hurt us lately (entity id, tick of its last hit), for {@link #huntedBy}. */
     private final Map<Integer, Long> attackers = new HashMap<>();
     private static final long HUNTED_TICKS = 20 * 60 * 5;
@@ -216,6 +218,7 @@ public final class Bot {
                     ? src.getEntity().getName().getString() + " (" + src.type().msgId() + ")" : src.type().msgId();
             lastAttackerId = src != null && src.getEntity() != null ? src.getEntity().getId() : -1;
             lastHurtTick = tick;
+            lastHurtBy = src == null ? null : src.type().msgId();
             if (src != null && src.getEntity() instanceof net.minecraft.world.entity.Mob m) {
                 attackers.values().removeIf(at -> tick - at > HUNTED_TICKS);
                 attackers.put(m.getId(), tick);
@@ -570,7 +573,7 @@ public final class Bot {
     public BlockPos pendingGrave() {
         if (pendingGrave == null) {
             BlockPos me = player().blockPosition();
-            pendingGrave = memory.graves.stream().filter(g -> g.dim.equals(dim())).map(BotMemory.Pos::pos)
+            pendingGrave = memory.graves.stream().filter(g -> g.dim.equals(dim()) && !memory.nearHazard(g)).map(BotMemory.Pos::pos)
                     .min(java.util.Comparator.comparingDouble(g -> g.distSqr(me))).orElse(null);
         }
         return pendingGrave;
@@ -589,6 +592,19 @@ public final class Bot {
     /** Leave every grave where it is. */
     public void forgetGraves() {
         memory.graves.clear();
+        pendingGrave = null;
+        memory.save();
+    }
+
+    /** Damage from lava or fire, by the server's damage type id. */
+    public static boolean burns(String msgId) {
+        return msgId != null && java.util.Set.of("lava", "inFire", "onFire", "hotFloor").contains(msgId);
+    }
+
+    /** Somewhere lava or fire got us: no graves near it. */
+    public void markHazard(BlockPos at) {
+        memory.addHazard(new BotMemory.Pos(at, dim()));
+        memory.graves.removeIf(g -> memory.nearHazard(g));
         pendingGrave = null;
         memory.save();
     }
@@ -691,7 +707,15 @@ public final class Bot {
         event("died at " + at.toShortString());
         brain.stopAll(this);
         Controls.releaseAll();
-        addGrave(at);
+        // burned to death (knocked out by it and bled out counts): the lava or fire is still there, and
+        // walking back for the grave is how we'd die there again
+        if (burns(lastHurtBy)) {
+            memory.addHazard(new BotMemory.Pos(at, dim()));
+            event("died to " + lastHurtBy + " at " + at.toShortString() + ": leaving that grave, and the place marked");
+        } else {
+            addGrave(at);
+        }
+        lastHurtBy = null;
         downedSince = null;
         bedCheckAt = tick + 200; // a death with no claim scatters us: find out if that's what happened
 

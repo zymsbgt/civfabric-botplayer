@@ -113,6 +113,22 @@ public final class BotMemory {
     public Map<String, Long> fighters = new HashMap<>();
     /** Our graves still to be emptied, oldest first: they survive a restart and a second death. */
     public List<Pos> graves = new ArrayList<>();
+    /**
+     * Where lava or fire killed us, or burned us on the way to a grave. A grave near one isn't worth
+     * going back for: Bot4 died at the same lava cave four times, each death leaving the next grave.
+     */
+    public List<Pos> hazards = new ArrayList<>();
+
+    /** Within 6 blocks of somewhere lava or fire got us. */
+    public boolean nearHazard(Pos p) {
+        return hazards.stream().anyMatch(h -> h.dim.equals(p.dim) && h.pos().closerThan(p.pos(), 6));
+    }
+
+    public void addHazard(Pos p) {
+        if (nearHazard(p)) return;
+        hazards.add(p);
+        while (hazards.size() > 20) hazards.remove(0);
+    }
     /** The single grave older memories kept; moved into {@link #graves} on load. */
     public Pos grave;
     public List<Station> stations = new ArrayList<>();
