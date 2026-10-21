@@ -57,6 +57,10 @@ public class LayFieldTask extends Task {
             BlockPos base = lol.zym.zymbot.brain.ClassPlan.teamHome(bot);
             BlockPos from = base != null ? base : bot.memory().home != null ? bot.memory().home.pos() : bot.player().blockPosition();
             water = findSite(bot, from, crops);
+            // back from a walk to water we'd seen: look around here, not the base again (the base can
+            // sit on a hill 60 blocks above its river), so long as it's a field the base can use
+            if (water == null && explores > 0 && bot.player().blockPosition().closerThan(from, 96))
+                water = findSite(bot, bot.player().blockPosition(), crops);
             if (water == null) {
                 var shore = lol.zym.zymbot.memory.Landmarks.nearest(bot, "water"::equals, 200);
                 if (shore != null && !shore.at.pos().closerThan(bot.player().blockPosition(), 30) && explores < 3) {
@@ -103,7 +107,8 @@ public class LayFieldTask extends Task {
         BlockPos best = null;
         double bestScore = 0;
         boolean rules = PlantRules.active();
-        for (BlockPos p : BlockPos.betweenClosed(from.offset(-40, -6, -40), from.offset(40, 6, 40))) {
+        // well below as well: a base on a rise has its water down the slope
+        for (BlockPos p : BlockPos.betweenClosed(from.offset(-40, -20, -40), from.offset(40, 8, 40))) {
             if (!WorldView.loaded(p) || !WorldView.state(p).getFluidState().is(Fluids.WATER)) continue;
             if (!bot.level().canSeeSky(p.above())) continue;
             // a pond or river edge, not open sea: some land right beside it

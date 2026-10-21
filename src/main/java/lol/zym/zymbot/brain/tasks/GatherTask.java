@@ -55,6 +55,10 @@ public class GatherTask extends Task {
         this.label = BuiltInRegistries.BLOCK.getKey(blocks.get(0)).getPath() + (blocks.size() > 1 ? "+" : "");
     }
 
+    public boolean gathers(Block b) {
+        return blocks.contains(b);
+    }
+
     @Override
     public String name() {
         return "Gather " + label + " " + Inv.count(match) + "/" + until + (target != null ? " @" + target.toShortString() : "");

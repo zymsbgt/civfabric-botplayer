@@ -27,6 +27,8 @@ public class SleepTask extends Task {
     private long clickedAt = -1;
     private int clicks;
     private boolean read;
+    private lol.zym.zymbot.control.Breaker clearing;
+    private int cleared;
 
     public SleepTask(BlockPos bed) {
         this(bed, false);
@@ -58,6 +60,14 @@ public class SleepTask extends Task {
             bot.event("my bed at " + bed.toShortString() + " is gone");
             return fail("bed gone");
         }
+        // something sitting on the bed (often our own scaffolding): break it, then lie down again
+        if (clearing != null) {
+            var r = clearing.tick();
+            if (r == lol.zym.zymbot.control.Breaker.Result.RUNNING) return Status.RUNNING;
+            clearing = null;
+            if (r != lol.zym.zymbot.control.Breaker.Result.DONE) return fail("couldn't clear the top of the bed");
+            clickedAt = -1;
+        }
         if (!inBedRange(p.position())) {
             Nav.goToBlock(bed);
             if (ticks > 20 * 120) return fail("can't reach bed");
@@ -71,6 +81,11 @@ public class SleepTask extends Task {
             if (said != null) {
                 said = said.replace("[CivLabs] » ", "").trim();
                 if (said.contains("too far away")) clickedAt = -1; // step closer: GoalGetToBlock can stop short
+                else if (said.contains("obstructed") && cleared < 3 && (clearing = blocker()) != null) {
+                    cleared++;
+                    bot.event("something's on top of the bed at " + clearing.pos().toShortString() + "; clearing it");
+                    return Status.RUNNING;
+                }
                 else if (said.contains("sleep only")) {
                     // daytime: the click still claimed it. Ask the server to be sure
                     if (claimOnly && clicks == 1) bot.player().connection.sendCommand("bed");
@@ -91,6 +106,22 @@ public class SleepTask extends Task {
         return Status.RUNNING;
     }
 
+    /** The first thing in the two blocks over either half of the bed that we may break, or null. */
+    private lol.zym.zymbot.control.Breaker blocker() {
+        var st = WorldView.state(bed);
+        BlockPos other = st.getBlock() instanceof BedBlock ? bed.relative(BedBlock.getConnectedDirection(st)) : bed;
+        for (BlockPos half : new BlockPos[]{bed, other})
+            for (int dy = 1; dy <= 2; dy++) {
+                BlockPos p = half.above(dy);
+                var s = WorldView.state(p);
+                if (WorldView.passable(p) || s.hasBlockEntity()) continue;
+                if (lol.zym.zymbot.world.BlockRules.natural(s) || s.is(net.minecraft.world.level.block.Blocks.COBBLESTONE))
+                    return new lol.zym.zymbot.control.Breaker(p);
+                return null; // someone's build: not ours to knock about
+            }
+        return null;
+    }
+
     /**
      * Vanilla's own test: within 3 blocks across and 2 up or down of either half of the bed. Reach
      * isn't enough, so a bot clicking from 4 away got "too far away" every night.
@@ -109,6 +140,8 @@ public class SleepTask extends Task {
     @Override
     public void stop(Bot bot) {
         super.stop(bot);
+        if (clearing != null) clearing.cancel();
+        clearing = null;
         Nav.stop();
     }
 }

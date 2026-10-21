@@ -42,6 +42,24 @@ public class EatTask extends Task {
         return -1;
     }
 
+    /** Food level we eat at regardless, wasteful or not: still above sprinting's 6. */
+    public static final int MUST_EAT = 8;
+
+    /**
+     * Something we carry fits the gap in the food bar now, with at most a point spilling over.
+     * Above {@link #MUST_EAT} we wait for one: health doesn't come back from a full bar here.
+     */
+    public static boolean fitsNow(Bot bot) {
+        int gap = 20 - bot.player().getFoodData().getFoodLevel();
+        for (int i = 0; i < 36; i++) {
+            ItemStack s = Inv.inv().getItem(i);
+            if (Inv.food(s) == null || Inv.riskyFood(s)) continue;
+            double v = Diet.nutrition(bot, s);
+            if (v >= 0.5 && v <= gap + 1) return true;
+        }
+        return false;
+    }
+
     public static int choose(Bot bot) {
         if (bot.health().hurt(bot) && !bot.health().naturalRegen(bot)) {
             int heal = chooseHealing(bot);
@@ -60,11 +78,17 @@ public class EatTask extends Task {
             if (WONT_EAT.getOrDefault(id, 0L) > System.currentTimeMillis() && !starving) continue;
             // what it restores after Spice of Fabric's repeats, and how long it takes to get it
             double value = Diet.nutrition(bot, s);
-            if (value < 0.5 && !starving) continue; // eaten so often it's worth nothing
-            double score = (value + f.saturation() * 2 * value / Math.max(1, f.nutrition())) / Math.sqrt(Diet.slowdown(bot, s));
-            // don't waste a big meal on a small gap
+            // eaten so often it's worth nothing: not even starving, since it fills nothing (its
+            // saturation stops at the food level, which is next to none by then). Foraging will
+            if (value < 0.5) continue;
+            // what it actually adds: hunger up to the gap, saturation up to the new food level (where
+            // vanilla caps it), less what spills over: a porkchop at 14 throws 2 points away
             int gap = 20 - food;
-            if (f.nutrition() > gap + 4) score *= 0.6;
+            double hunger = Math.min(value, gap);
+            double newFood = Math.min(20, food + value);
+            double sat = Math.min(f.saturation(), Math.max(0, newFood - bot.player().getFoodData().getSaturationLevel()));
+            double score = (hunger + sat * 0.5 - (value - hunger) * 1.5) / Math.sqrt(Diet.slowdown(bot, s));
+            if (score <= 0) score = 0.01; // still better than nothing when it's all we have
             if (Inv.riskyFood(s)) score *= 0.2;
             if (score > bestScore) {
                 bestScore = score;

@@ -147,7 +147,8 @@ public class ShelterTask extends Task {
                     break;
                 }
                 // hungry in the hole: eat (the eat reflex can't take over from us)
-                if (p.getFoodData().getFoodLevel() <= 14 && EatTask.choose(bot) >= 0 && phaseTicks % 200 == 0) {
+                int food = p.getFoodData().getFoodLevel();
+                if ((food <= 14 && EatTask.fitsNow(bot) || food <= EatTask.MUST_EAT) && EatTask.choose(bot) >= 0 && phaseTicks % 200 == 0) {
                     setChild(bot, new EatTask());
                     break;
                 }

@@ -56,6 +56,9 @@ public class StorageTask extends Task {
                 if (!WorldView.state(p).isAir() || !WorldView.floor(p.below()) || !WorldView.state(p.above()).isAir()) continue;
                 var below = WorldView.state(p.below());
                 if (below.is(net.minecraft.world.level.block.Blocks.FARMLAND) || !below.getFluidState().isEmpty()) continue;
+                // not on the bed (home is usually the bed: a chest there blocks it, and placing one
+                // means clicking the bed) nor on anything else that does something when clicked
+                if (below.is(net.minecraft.tags.BlockTags.BEDS) || below.hasBlockEntity()) continue;
                 if (bot.memory().planting(bot.dim(), p.below()) != null) continue;
                 double d = p.distSqr(h);
                 if (d < best) {

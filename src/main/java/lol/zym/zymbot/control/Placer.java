@@ -124,7 +124,12 @@ public final class Placer {
     }
 
     private static boolean interactive(BlockState s) {
+        // a bed isn't a BaseEntityBlock: clicking one to place against it lies down (or claims it)
         return s.getBlock() instanceof net.minecraft.world.level.block.BaseEntityBlock
+                || s.getBlock() instanceof net.minecraft.world.level.block.BedBlock
+                || s.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock
+                || s.getBlock() instanceof net.minecraft.world.level.block.ButtonBlock
+                || s.getBlock() instanceof net.minecraft.world.level.block.LeverBlock
                 || s.getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock
                 || s.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
                 || s.getBlock() instanceof net.minecraft.world.level.block.TrapDoorBlock;

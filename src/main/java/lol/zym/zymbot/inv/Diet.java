@@ -57,20 +57,52 @@ public final class Diet {
         return history;
     }
 
-    /** Hunger this food restores now, given what we ate lately. */
+    /** Hunger this food restores now, given what we ate lately: the mod rounds it to whole points. */
     public static double nutrition(Bot bot, ItemStack s) {
         FoodProperties f = Inv.food(s);
         if (f == null) return 0;
         load();
         if (!active) return f.nutrition();
-        return f.nutrition() * Math.pow(hungerBase, bot.memory().timesEatenRecently(Inv.id(s.getItem())));
+        return worth(f.nutrition(), timesEaten(bot, s));
+    }
+
+    /** Spice of Fabric's {@code max(0, round(hungerValue * base^timesEaten))}. */
+    private static double worth(int hunger, int times) {
+        return Math.max(0, Math.round(hunger * Math.pow(hungerBase, times)));
     }
 
     /** How much longer than normal this food takes to eat now. */
     public static double slowdown(Bot bot, ItemStack s) {
         load();
         if (!active) return 1;
-        return Math.pow(durationBase, bot.memory().timesEatenRecently(Inv.id(s.getItem())));
+        return Math.pow(durationBase, timesEaten(bot, s));
+    }
+
+    private static java.lang.reflect.Method historyOf, timesRecently;
+    private static boolean reflectFailed;
+
+    /**
+     * Times this food is in the last meals, as the server counts them: Spice of Fabric syncs the
+     * player's history to the client, so read it there. Our own record is only a fallback: it starts
+     * empty on every server and misses anything not eaten through EatTask (a bot that thought a potato
+     * was fresh ate one worth nothing).
+     */
+    public static int timesEaten(Bot bot, ItemStack s) {
+        if (!reflectFailed) {
+            try {
+                if (historyOf == null) {
+                    Class<?> fh = Class.forName("de.siphalor.spiceoffabric.foodhistory.FoodHistory");
+                    historyOf = fh.getMethod("get", net.minecraft.world.entity.player.Player.class);
+                    timesRecently = fh.getMethod("getTimesRecentlyEaten", ItemStack.class);
+                }
+                Object h = historyOf.invoke(null, bot.player());
+                if (h != null) return (Integer) timesRecently.invoke(h, s);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                reflectFailed = true;
+                ZymBotMod.LOG.warn("Can't read Spice of Fabric's food history; counting meals ourselves", e);
+            }
+        }
+        return bot.memory().timesEatenRecently(Inv.id(s.getItem()));
     }
 
     /**
@@ -98,10 +130,10 @@ public final class Diet {
             FoodProperties f = Inv.food(s);
             if (f == null || Inv.riskyFood(s)) continue;
             String id = Inv.id(s.getItem());
-            int past = active ? bot.memory().timesEatenRecently(id) : 0;
+            int past = active ? timesEaten(bot, s) : 0;
             for (int n = 0; n < s.getCount(); n++) {
                 int k = seen.merge(id, 1, Integer::sum) - 1;
-                total += active ? f.nutrition() * Math.pow(hungerBase, Math.min(past + k, history)) : f.nutrition();
+                total += active ? worth(f.nutrition(), Math.min(past + k, history)) : f.nutrition();
             }
         }
         return total;

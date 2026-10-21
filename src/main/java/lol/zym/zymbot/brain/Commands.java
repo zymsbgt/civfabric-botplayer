@@ -75,7 +75,7 @@ public final class Commands {
         for (int i = 0; i < inv.getContainerSize(); i++) {
             if (inv.getItem(i).getItem() instanceof net.minecraft.world.item.BlockItem bi
                     && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock c && seen.add(c))
-                mine.add(BuiltInRegistries.BLOCK.getKey(c).getPath() + " " + pr.judge(c, at).why());
+                mine.add(BuiltInRegistries.BLOCK.getKey(c).getPath() + " " + pr.judgeClimate(c, at).why());
         }
         if (!mine.isEmpty()) sb.append(". My seeds here: ").append(String.join("; ", mine));
         return sb.toString();

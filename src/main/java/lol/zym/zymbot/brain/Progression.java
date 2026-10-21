@@ -23,7 +23,8 @@ import java.util.function.Function;
  * blocker (no iron nearby, a CivFabric gate) doesn't stall everything after it.
  */
 public final class Progression {
-    public record Milestone(String id, BooleanSupplier done, Function<Bot, Task> make) {}
+    /** {@code wants}: what making it takes, for the shopping list to pick up on the way. */
+    public record Milestone(String id, BooleanSupplier done, Function<Bot, Task> make, Map<Item, Integer> wants) {}
 
     private final List<Milestone> ladder = new ArrayList<>();
     private final Map<String, Long> snoozed = new HashMap<>();
@@ -34,11 +35,11 @@ public final class Progression {
         add("crafting_table", () -> Inv.has(Items.CRAFTING_TABLE) || b().memory().nearestStation("crafting_table",
                         b().player().blockPosition(), b().dim(), 24)
                 .filter(st -> lol.zym.zymbot.world.WorldView.state(st.at.pos()).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE))
-                .isPresent(), b -> obtain(Items.CRAFTING_TABLE, 1));
+                .isPresent(), b -> obtain(Items.CRAFTING_TABLE, 1), Map.of(Items.CRAFTING_TABLE, 1));
         // a sword before any long walk (rejoining the team, a grave): a spider pack killed an unarmed bot
         // in seconds, and a Pokémon that fights back has to be finished. Worth the 3 food it costs (a
         // pickaxe doesn't count, though it hits a little harder than a fist)
-        add("wooden_sword", Inv::armed, b -> obtain(Items.WOODEN_SWORD, 1));
+        add("wooden_sword", Inv::armed, b -> obtain(Items.WOODEN_SWORD, 1), Map.of(Items.WOODEN_SWORD, 1));
         // stay with the team: a bot that wandered (or respawned) far from the base walks back first
         add("rejoin", () -> {
             BlockPos t = ClassPlan.teamHome(b());
@@ -46,15 +47,15 @@ public final class Progression {
         }, b -> new GoToTask(ClassPlan.teamHome(b), 12));
         // Spice of Fabric: a stack of one food is worth little, so "enough" means value and variety
         add("food_stock", Progression::stocked, Progression::food);
-        add("wooden_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 0, b -> obtain(Items.WOODEN_PICKAXE, 1));
+        add("wooden_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 0, b -> obtain(Items.WOODEN_PICKAXE, 1), Map.of(Items.WOODEN_PICKAXE, 1));
         // free to craft while classless (as are chests, torches and sticks): before the first rank
-        add("furnace", () -> Inv.has(Items.FURNACE), b -> obtain(Items.FURNACE, 1));
+        add("furnace", () -> Inv.has(Items.FURNACE), b -> obtain(Items.FURNACE, 1), Map.of(Items.FURNACE, 1));
         // food stock counts raw meat at its cooked worth, so cook it as soon as there's a furnace
         add("cook_meat", () -> rawMeat() == null || !Inv.has(Items.FURNACE), b -> cook(rawMeat()));
 
         // ---- phase 2: a farm. The Grower makes it; everyone else sends it their seeds -------
         // the Grower always carries a hoe: CivFabric destroys any crop harvested without one
-        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1));
+        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1), Map.of(Items.WOODEN_HOE, 1));
         // seed for 3 crops that grow at the base: Realistic Plant Growth won't put the same crop back
         // in the same soil for days, so a one-crop farm empties itself
         add("seeds", () -> !ClassPlan.isGrower(b()) || seedKinds() >= 3 && seedCount() >= 12, Progression::seeds);
@@ -79,27 +80,28 @@ public final class Progression {
 
         // ---- phase 3: classes, each bot in its role's, with gear as ranks unlock it ---------
         add("level_apprentice", () -> levelled(1), b -> level(b));
-        add("stone_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 1, b -> obtain(Items.STONE_PICKAXE, 1));
-        add("stone_sword", () -> Inv.bestTier(SwordItem.class) >= 1, b -> obtain(Items.STONE_SWORD, 1));
-        add("stone_axe", () -> Inv.bestTier(AxeItem.class) >= 1, b -> obtain(Items.STONE_AXE, 1));
-        add("stone_shovel", () -> Inv.bestTier(ShovelItem.class) >= 1, b -> obtain(Items.STONE_SHOVEL, 1));
+        add("stone_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 1, b -> obtain(Items.STONE_PICKAXE, 1), Map.of(Items.STONE_PICKAXE, 1));
+        add("stone_sword", () -> Inv.bestTier(SwordItem.class) >= 1, b -> obtain(Items.STONE_SWORD, 1), Map.of(Items.STONE_SWORD, 1));
+        add("stone_axe", () -> Inv.bestTier(AxeItem.class) >= 1, b -> obtain(Items.STONE_AXE, 1), Map.of(Items.STONE_AXE, 1));
+        add("stone_shovel", () -> Inv.bestTier(ShovelItem.class) >= 1, b -> obtain(Items.STONE_SHOVEL, 1), Map.of(Items.STONE_SHOVEL, 1));
         add("coal", () -> Inv.count(s -> s.is(Items.COAL) || s.is(Items.CHARCOAL)) >= 8 || Inv.count(Items.TORCH) >= 16,
-                b -> new ObtainTask(new ItemTarget("coal", s -> s.is(Items.COAL) || s.is(Items.CHARCOAL), List.of(Items.COAL, Items.CHARCOAL), 8)));
-        add("torches", () -> Inv.count(Items.TORCH) >= 16, b -> obtain(Items.TORCH, 16));
+                b -> new ObtainTask(new ItemTarget("coal", s -> s.is(Items.COAL) || s.is(Items.CHARCOAL), List.of(Items.COAL, Items.CHARCOAL), 8)),
+                Map.of(Items.COAL, 8));
+        add("torches", () -> Inv.count(Items.TORCH) >= 16, b -> obtain(Items.TORCH, 16), Map.of(Items.TORCH, 16));
         add("level_journeyman", () -> levelled(2), b -> level(b));
-        add("iron_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 2, b -> obtain(Items.IRON_PICKAXE, 1));
-        add("shield", () -> Inv.has(Items.SHIELD), b -> obtain(Items.SHIELD, 1));
-        add("iron_sword", () -> Inv.bestTier(SwordItem.class) >= 2, b -> obtain(Items.IRON_SWORD, 1));
+        add("iron_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 2, b -> obtain(Items.IRON_PICKAXE, 1), Map.of(Items.IRON_PICKAXE, 1));
+        add("shield", () -> Inv.has(Items.SHIELD), b -> obtain(Items.SHIELD, 1), Map.of(Items.SHIELD, 1));
+        add("iron_sword", () -> Inv.bestTier(SwordItem.class) >= 2, b -> obtain(Items.IRON_SWORD, 1), Map.of(Items.IRON_SWORD, 1));
         add("level_expert", () -> levelled(3), b -> level(b));
-        add("iron_chestplate", () -> wearingOrHas(Items.IRON_CHESTPLATE, Items.DIAMOND_CHESTPLATE), b -> obtain(Items.IRON_CHESTPLATE, 1));
-        add("iron_helmet", () -> wearingOrHas(Items.IRON_HELMET, Items.DIAMOND_HELMET), b -> obtain(Items.IRON_HELMET, 1));
-        add("iron_leggings", () -> wearingOrHas(Items.IRON_LEGGINGS, Items.DIAMOND_LEGGINGS), b -> obtain(Items.IRON_LEGGINGS, 1));
-        add("iron_boots", () -> wearingOrHas(Items.IRON_BOOTS, Items.DIAMOND_BOOTS), b -> obtain(Items.IRON_BOOTS, 1));
+        add("iron_chestplate", () -> wearingOrHas(Items.IRON_CHESTPLATE, Items.DIAMOND_CHESTPLATE), b -> obtain(Items.IRON_CHESTPLATE, 1), Map.of(Items.IRON_CHESTPLATE, 1));
+        add("iron_helmet", () -> wearingOrHas(Items.IRON_HELMET, Items.DIAMOND_HELMET), b -> obtain(Items.IRON_HELMET, 1), Map.of(Items.IRON_HELMET, 1));
+        add("iron_leggings", () -> wearingOrHas(Items.IRON_LEGGINGS, Items.DIAMOND_LEGGINGS), b -> obtain(Items.IRON_LEGGINGS, 1), Map.of(Items.IRON_LEGGINGS, 1));
+        add("iron_boots", () -> wearingOrHas(Items.IRON_BOOTS, Items.DIAMOND_BOOTS), b -> obtain(Items.IRON_BOOTS, 1), Map.of(Items.IRON_BOOTS, 1));
         add("poke_balls", () -> !BotConfig.get().catchPokemon || ItemTarget.parse("cobblemon:poke_ball", 1) == null
                         || Inv.find(CatchPokemonTask::isBall) >= 0,
                 b -> new ObtainTask(ItemTarget.parse("cobblemon:poke_ball", 8)));
         add("level_master", () -> levelled(4), b -> level(b));
-        add("diamond_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 3, b -> obtain(Items.DIAMOND_PICKAXE, 1));
+        add("diamond_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 3, b -> obtain(Items.DIAMOND_PICKAXE, 1), Map.of(Items.DIAMOND_PICKAXE, 1));
         add("level_grandmaster", () -> levelled(5), b -> level(b));
     }
 
@@ -170,6 +172,11 @@ public final class Progression {
         return Inv.count(Progression::plantable);
     }
 
+    /** Seeds we carry that will grow at our base's biome. */
+    private static int growingSeeds(Bot bot) {
+        return Inv.count(s -> plantable(s) && growsAtBase(bot, ((BlockItem) s.getItem()).getBlock()));
+    }
+
     /** Different seeds we carry that will actually grow at our base's biome. */
     private static int seedKinds() {
         java.util.Set<Item> k = new java.util.HashSet<>();
@@ -187,7 +194,8 @@ public final class Progression {
         if (!pr.governs(crop)) return true;
         BlockPos at = ClassPlan.teamHome(bot);
         if (at == null) at = bot.player().blockPosition();
-        return pr.judge(crop, at.above()).grows();
+        // the climate there: the base itself may be under trees or a roof, the field won't be
+        return pr.judgeClimate(crop, at.above()).grows();
     }
 
     /**
@@ -195,20 +203,52 @@ public final class Progression {
      * barley, oat and lettuce seeds, wild potatoes and carrots plant themselves), and so does tall
      * grass (wheat seeds). Wild crops first: they're food too.
      */
-    private static Task seeds(Bot bot) {
-        // wild crops whose seed grows at the base and that we don't carry yet
+    /** Wild crops that would give us a seed we don't carry yet, of a crop that grows at the base. */
+    public static List<net.minecraft.world.level.block.Block> newSeedSources(Bot bot) {
         List<net.minecraft.world.level.block.Block> wild = new ArrayList<>();
         for (var b : net.minecraft.core.registries.BuiltInRegistries.BLOCK) {
             String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).getPath();
             if (!id.startsWith("wild_")) continue;
-            boolean useful = lol.zym.zymbot.craft.Sources.lootOf(b).stream().anyMatch(d -> d instanceof BlockItem bi
-                    && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock && growsAtBase(bot, bi.getBlock()) && Inv.count(d) == 0);
-            if (useful && (bot.seenNearby(b) || lol.zym.zymbot.memory.Landmarks.nearest(bot, ("wild:" + id.substring(5))::equals, 120) != null)) wild.add(b);
+            if (lol.zym.zymbot.craft.Sources.lootOf(b).stream().anyMatch(d -> d instanceof BlockItem bi
+                    && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock && growsAtBase(bot, bi.getBlock()) && Inv.count(d) == 0))
+                wild.add(b);
+        }
+        return wild;
+    }
+
+    /** Seeds are still wanted: fewer than three kinds, or too few to sow. */
+    public static boolean wantSeeds(Bot bot) {
+        return ClassPlan.isGrower(bot) && (seedKinds() < 3 || seedCount() < 12);
+    }
+
+    private static Task seeds(Bot bot) {
+        // wild crops whose seed grows at the base and that we don't carry yet
+        List<net.minecraft.world.level.block.Block> wild = new ArrayList<>();
+        for (var b : newSeedSources(bot)) {
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b).getPath();
+            if (bot.seenNearby(b) || lol.zym.zymbot.memory.Landmarks.nearest(bot, ("wild:" + id.substring(5))::equals, 120) != null) wild.add(b);
         }
         if (!wild.isEmpty()) return new GatherTask(wild, Progression::plantable, seedCount() + 4);
+        // grass only ever gives wheat seeds: once we have enough to sow, or if wheat won't grow at
+        // the base anyway, more is no help (a bot carried 70 still looking for a third kind, and
+        // none of them would grow). Go looking for wild crops twice in half an hour, then make do
+        // with the kinds we have; the shopping list still picks one up on the way
+        if (growingSeeds(bot) >= 12 || !growsAtBase(bot, net.minecraft.world.level.block.Blocks.WHEAT)) {
+            long now = System.currentTimeMillis();
+            seedHunts.removeIf(t -> now - t > 30 * 60_000L);
+            if (seedHunts.size() >= 2) {
+                bot.event("no wild crops of a new kind about; farming with the " + seedKinds() + " we have");
+                return null;
+            }
+            seedHunts.add(now);
+            return new ExploreTask(96);
+        }
         return new GatherTask(List.of(net.minecraft.world.level.block.Blocks.SHORT_GRASS, net.minecraft.world.level.block.Blocks.TALL_GRASS),
                 Progression::plantable, seedCount() + 6);
     }
+
+    /** When we last went exploring for a new kind of seed. */
+    private static final List<Long> seedHunts = new ArrayList<>();
 
     private static boolean ownChestNearHome(Bot bot) {
         BlockPos home = bot.memory().home.pos();
@@ -292,7 +332,11 @@ public final class Progression {
     }
 
     private void add(String id, BooleanSupplier done, Function<Bot, Task> make) {
-        ladder.add(new Milestone(id, done, make));
+        add(id, done, make, Map.of());
+    }
+
+    private void add(String id, BooleanSupplier done, Function<Bot, Task> make, Map<Item, Integer> wants) {
+        ladder.add(new Milestone(id, done, make, wants));
     }
 
     private static Task obtain(Item item, int n) {
@@ -336,9 +380,8 @@ public final class Progression {
         EntityType<?>[] from = {EntityType.COW, EntityType.PIG, EntityType.SHEEP, EntityType.CHICKEN, EntityType.RABBIT};
         List<EntityType<?>> want = new ArrayList<>();
         for (int i = 0; i < meats.length; i++) {
-            String raw = Inv.id(meats[i]), done = Inv.id(cooked[i]);
             int have = Inv.count(meats[i]) + Inv.count(cooked[i]);
-            int eaten = bot.memory().timesEatenRecently(raw) + bot.memory().timesEatenRecently(done);
+            int eaten = lol.zym.zymbot.inv.Diet.timesEaten(bot, new ItemStack(meats[i])) + lol.zym.zymbot.inv.Diet.timesEaten(bot, new ItemStack(cooked[i]));
             if (have < 4 && eaten < 3) want.add(from[i]);
         }
         // only chase what's actually around (pacifist servers have no pigs at all), else anything
@@ -416,6 +459,16 @@ public final class Progression {
             return m;
         }
         return null;
+    }
+
+    /** The next {@code k} milestones still to do (snoozed ones included: their materials still help). */
+    public List<Milestone> upcoming(int k) {
+        List<Milestone> out = new ArrayList<>();
+        for (Milestone m : ladder) {
+            if (out.size() >= k) break;
+            if (!m.done().getAsBoolean()) out.add(m);
+        }
+        return out;
     }
 
     public void snooze(String id, long millis) {

@@ -49,6 +49,9 @@ public final class Brain {
     private long noUnstuckUntil;
     private long noShoreUntil;
     private long noTreatUntil, nextHealCall, noForageUntil, nextFragileWork;
+    private final ShoppingList shopping = new ShoppingList();
+    private ShoppingList.Find detour;
+    private long noDetourUntil;
     private int graveDives;
     private Player patient;
     /** Ticks spent in deep water with Baritone not taking us anywhere. */
@@ -142,6 +145,12 @@ public final class Brain {
                     if ("unstuck".equals(reflexKind)) noUnstuckUntil = System.currentTimeMillis() + 2 * 60_000L;
                     if ("shore".equals(reflexKind)) noShoreUntil = System.currentTimeMillis() + 60_000L;
                     if ("grave".equals(reflexKind)) bot.clearPendingGrave();
+                }
+                if ("detour".equals(reflexKind) && reflex instanceof DetourTask d) {
+                    // give the errand a stretch before the next side trip
+                    noDetourUntil = System.currentTimeMillis() + 20_000;
+                    bot.event("detour " + (d.got() > 0 ? "done: +" + d.got() + " " : "came back empty: ") + detour.want().what());
+                    shopping.stale();
                 }
                 if (s == Task.Status.SUCCESS && "grave".equals(reflexKind)) bot.clearPendingGrave();
                 reflex.stop(bot);
@@ -461,7 +470,11 @@ public final class Brain {
         int food = p.getFoodData().getFoodLevel();
         boolean wet = deep || p.isUnderWater();
         boolean hurtForGood = bot.health().hurt(bot) && !bot.health().naturalRegen(bot);
-        if ((!wet || food <= 3) && (food <= 14 || food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0) return "eat";
+        // eat when something fits the gap (or we're down to the floor); where health regenerates
+        // from a full bar, topping up while hurt is worth the spill
+        boolean regen = bot.health().naturalRegen(bot);
+        if ((!wet || food <= 3) && (food <= 14 && EatTask.fitsNow(bot) || food <= EatTask.MUST_EAT
+                || regen && food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0) return "eat";
         if (!wet && hurtForGood && EatTask.chooseHealing(bot) >= 0) return "eat";
         // a blood moon: every mob is after us until dawn. Dig in, ahead of foraging, graves and
         // errands (all of which mean walking about in the dark). CivFabric's night watch lets all but
@@ -490,6 +503,21 @@ public final class Brain {
         if (cfg.sleep && WorldView.isNight() && bot.memory().bed != null && System.currentTimeMillis() > noSleepUntil
                 && bot.memory().bed.pos().closerThan(p.blockPosition(), 128) && bot.dim().equals(bot.memory().bed.dim))
             return "sleep";
+        // something on the shopping list a few steps away: pick it up on the way. Only between our
+        // own goals (never on a job someone gave us), by day, healthy, and not under a blood moon
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && bot.role().autonomous()
+                && System.currentTimeMillis() > noDetourUntil && bot.ticks() % 40 == 0 && !WorldView.isNight()
+                && !bot.pacifism().bloodMoon() && !bot.health().hurt(bot) && !wet && Inv.freeSlots() > 2) {
+            Task doing = active == Layer.PROGRESS ? progress : idle;
+            // only out of walking about: a detour mid-smelt came back to a furnace it had lost track of
+            Task now = doing == null ? null : doing.leaf();
+            boolean walking = now == null || now instanceof GatherTask || now instanceof ExploreTask || now instanceof GoToTask
+                    || now instanceof HuntTask;
+            if (walking) {
+                detour = shopping.find(bot, b -> doing != null && doing.inChain(x -> x instanceof GatherTask g && g.gathers(b)));
+                if (detour != null) return "detour";
+            }
+        }
         return null;
     }
 
@@ -544,6 +572,12 @@ public final class Brain {
                 yield Progression.food(bot);
             }
             case "sleep" -> new SleepTask(bot.memory().bed.pos());
+            case "detour" -> {
+                shopping.tried(detour.at());
+                noDetourUntil = System.currentTimeMillis() + 60_000; // until it ends, at the least
+                bot.event("on the way: " + detour.want().what() + " at " + detour.at().toShortString() + " (shopping list)");
+                yield new DetourTask(detour, bot.player().blockPosition());
+            }
             case "treat" -> {
                 noTreatUntil = System.currentTimeMillis() + 8_000;
                 yield new TreatTask(patient);

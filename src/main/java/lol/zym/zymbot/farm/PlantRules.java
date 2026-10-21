@@ -216,10 +216,20 @@ public final class PlantRules {
     /** How {@code crop} would fare planted (by a player) at {@code cropPos}. */
     public Judgement judge(Block crop, BlockPos cropPos) {
         ResourceLocation id = BuiltInRegistries.BLOCK.getKey(crop);
+        if (plants.containsKey(id) && !growInDark.contains(id)
+                && WorldView.level().getBrightness(LightLayer.SKY, cropPos.above()) < minNaturalLight)
+            return new Judgement(true, Rate.DEATH, "needs open sky");
+        return judgeClimate(crop, cropPos);
+    }
+
+    /**
+     * The biome's verdict alone, as if planted under open sky: whether a crop suits a place, not a
+     * particular block of it (a base under trees or a roof still has a field out in the open).
+     */
+    public Judgement judgeClimate(Block crop, BlockPos cropPos) {
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(crop);
         Plant plant = plants.get(id);
         if (plant == null) return new Judgement(false, new Rate(100, 0), "not governed");
-        if (!growInDark.contains(id) && WorldView.level().getBrightness(LightLayer.SKY, cropPos.above()) < minNaturalLight)
-            return new Judgement(true, Rate.DEATH, "needs open sky");
         ResourceLocation biome = biomeAt(cropPos);
         if (biome == null) return new Judgement(false, new Rate(100, 0), "unknown biome");
         Rate r = plant.forBiome(biome, groups);

@@ -58,6 +58,16 @@ public abstract class Task {
         }
     }
 
+    /** The innermost task: what we're actually doing right now. */
+    public Task leaf() {
+        return child == null ? this : child.leaf();
+    }
+
+    /** This task or one under it matches. */
+    public boolean inChain(java.util.function.Predicate<Task> p) {
+        return p.test(this) || child != null && child.inChain(p);
+    }
+
     /** "Obtain stone_pickaxe > Gather cobblestone > Mine 12,64,3" */
     public String chain() {
         return child == null ? name() : name() + " > " + child.chain();
