@@ -230,6 +230,9 @@ public final class Progression {
     }
 
     private static Task seeds(Bot bot) {
+        // Farm & Charm makes seeds of crops we carry as food (1 lettuce: 3 seeds): no hunt needed
+        Item crafted = seedFromCrop(bot);
+        if (crafted != null) return new ObtainTask(ItemTarget.of(crafted, 6)).makeIt();
         // wild crops whose seed grows at the base and that we don't carry yet
         List<net.minecraft.world.level.block.Block> wild = new ArrayList<>();
         for (var b : newSeedSources(bot)) {
@@ -253,6 +256,20 @@ public final class Progression {
         }
         return new GatherTask(List.of(net.minecraft.world.level.block.Blocks.SHORT_GRASS, net.minecraft.world.level.block.Blocks.TALL_GRASS),
                 Progression::plantable, seedCount() + 6);
+    }
+
+    /** A seed we don't carry, that grows at the base, and that we can craft out of what we hold. */
+    private static Item seedFromCrop(Bot bot) {
+        for (Item seed : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            ItemStack st = new ItemStack(seed);
+            if (!plantable(st) || Inv.count(seed) > 0 || !growsAtBase(bot, ((BlockItem) seed).getBlock())) continue;
+            if (!bot.civ().canCraft(bot.memory(), Inv.id(seed))) continue;
+            for (var h : lol.zym.zymbot.craft.Recipes.craftingFor(seed)) {
+                if (!bot.civ().canCraft(bot.memory(), h.id().toString())) continue;
+                if (lol.zym.zymbot.craft.Recipes.nonEmpty(h.value()).stream().allMatch(i -> Inv.count(i::test) > 0)) return seed;
+            }
+        }
+        return null;
     }
 
     /** When we last went exploring for a new kind of seed. */

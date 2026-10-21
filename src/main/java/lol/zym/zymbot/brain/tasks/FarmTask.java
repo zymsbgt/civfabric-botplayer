@@ -66,6 +66,8 @@ public class FarmTask extends Task {
     private boolean replantOff;
     private boolean tillOff;
     private int hoeTries;
+    /** Empty plots, and no seed we hold grows on them. */
+    private boolean cantSow;
     private Item offhandWas;
     private int sinceSweep;
     private int harvested, sown, tilled;
@@ -108,8 +110,11 @@ public class FarmTask extends Task {
             jobTicks = 0;
             if (job == null) {
                 Nav.stop();
+                idleTicks++;
+                // nothing we hold grows on the empty plots: say so and go (other seeds are the fix), not idle out the shift
+                if (cantSow && idleTicks > 20 * 20) return fail("nothing I hold grows here");
                 // the crops are growing and there's nothing to tend: fish meanwhile, back as soon as there's work
-                if (++idleTicks > 20 * 30 && FishTask.canFish(bot)) {
+                if (idleTicks > 20 * 30 && FishTask.canFish(bot)) {
                     idleTicks = 0;
                     setChild(bot, new FishTask(center, () -> next(bot) != null, 5));
                 }
@@ -446,6 +451,7 @@ public class FarmTask extends Task {
                 best = c;
             }
         }
+        cantSow = best == null && !no.isEmpty() && no.stream().noneMatch(s -> s.endsWith("soil spent"));
         if (best == null) {
             String biome = rules && PlantRules.biomeAt(at) != null ? " in " + PlantRules.biomeAt(at).getPath() : "";
             boolean resting = no.stream().anyMatch(s -> s.endsWith("soil spent"));
