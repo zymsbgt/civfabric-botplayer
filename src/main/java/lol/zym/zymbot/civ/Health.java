@@ -7,8 +7,8 @@ import net.minecraft.world.effect.MobEffects;
 /**
  * Whether health comes back by itself. The ZymLabs server turns natural regeneration off (on
  * Hard), so health only returns from bed rest by a campfire, a medic's stitches, potions or
- * healing food: it's a resource to spend carefully. We find out by watching: a well-fed bot
- * that doesn't heal for 30 s has no regeneration.
+ * healing food: it's a resource to spend carefully. Elsewhere we find out by watching: a
+ * well-fed bot that doesn't heal for 30 s has no regeneration.
  */
 public final class Health {
     private float last = -1;
@@ -27,19 +27,22 @@ public final class Health {
         if (h < last) lastDrop = t;
         if (h > last) {
             lastRise = t;
-            if (!helped && t - bot.lastHealedAt() > 100) bot.memory().naturalRegen = true;
+            // not on CivFabric: a rise there is a medic, a warm bed or a mod's food, never regeneration
+            if (!helped && t - bot.lastHealedAt() > 100 && !bot.civ().present()) bot.memory().naturalRegen = true;
         }
         if (h < p.getMaxHealth() - 1 && p.getFoodData().getFoodLevel() >= 18 && !helped
                 && t - lastDrop > 600 && t - lastRise > 600 && t - bot.lastHealedAt() > 600) {
-            if (bot.memory().naturalRegen == null || bot.memory().naturalRegen) bot.event("health isn't coming back on its own: playing it safe");
+            if (!bot.civ().present() && (bot.memory().naturalRegen == null || bot.memory().naturalRegen))
+                bot.event("health isn't coming back on its own: playing it safe");
             bot.memory().naturalRegen = false;
             lastRise = t; // don't re-announce every tick
         }
         last = h;
     }
 
-    /** Until seen otherwise, assume a CivFabric server doesn't regenerate. */
+    /** The ZymCivModded pack has none; anywhere else, what we've seen (on until seen otherwise). */
     public boolean naturalRegen(Bot bot) {
+        if (bot.civ().present()) return false;
         Boolean r = bot.memory().naturalRegen;
         return r != null ? r : !bot.civ().present();
     }
