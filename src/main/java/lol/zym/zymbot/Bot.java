@@ -672,6 +672,7 @@ public final class Bot {
         }
 
         if (tick % 100 == 0 && p.containerMenu == p.inventoryMenu) equipArmor();
+        if (tick % 100 == 50) indexTables();
         if (tick % 40 == 0 && inventoryFull() && p.containerMenu == p.inventoryMenu) dropJunk();
 
         trackStuck();
@@ -794,6 +795,22 @@ public final class Bot {
     }
 
     private long nextSpareDrop;
+
+    /**
+     * Crafting tables we may use (ours, the team base's), remembered as we pass them, and the ones
+     * gone from where we left them forgotten: walking to one beats crafting yet another (the user
+     * counted a lot of tables being made).
+     */
+    private void indexTables() {
+        BlockPos me = player().blockPosition();
+        for (BlockPos q : BlockPos.betweenClosed(me.offset(-12, -6, -12), me.offset(12, 6, 12))) {
+            if (!(WorldView.state(q).getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock)) continue;
+            if (memory.stations.stream().anyMatch(s -> s.at.pos().equals(q)) || nearSomeoneElsesBuild(q)) continue;
+            memory.addStation("crafting_table", q.immutable(), dim(), false);
+        }
+        memory.stations.removeIf(s -> "crafting_table".equals(s.type) && dim().equals(s.at.dim) && s.at.pos().closerThan(me, 12)
+                && WorldView.loaded(s.at.pos()) && !(WorldView.state(s.at.pos()).getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock));
+    }
 
     /**
      * A full pack, every couple of seconds: junk goes first (Keep's order: scaffold past a stack, worse

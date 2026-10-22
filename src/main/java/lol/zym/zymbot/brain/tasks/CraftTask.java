@@ -95,10 +95,16 @@ public class CraftTask extends Task {
                 }
                 if (!Breaker.inReach(tablePos)) {
                     Nav.goToBlock(tablePos);
+                    walked = true;
                     if (ticks > 20 * 60) return fail("can't reach crafting table");
                     return Status.RUNNING;
                 }
                 Nav.stop();
+                // the clicks' ten seconds start when we get there, not when we set off for a table across the base
+                if (walked) {
+                    walked = false;
+                    ticks = 0;
+                }
                 if (ticks % 20 == 0 || ticks < 3) Placer.use(tablePos);
                 // ten seconds of clicks and no screen: most likely the table isn't where we think (a
                 // placement the server put a block over from where the client showed it). Forget it
@@ -194,7 +200,9 @@ public class CraftTask extends Task {
             case CLEANUP -> {
                 clearGrid(bot);
                 if (table) bot.player().closeContainer();
-                phase = placedTable && BotConfig.get().reclaimStations ? Phase.RECLAIM : null;
+                // picked back up out in the field; left standing at the base, where the next craft
+                // (ours or a teammate's) walks to it instead of crafting another
+                phase = placedTable && BotConfig.get().reclaimStations && !atBase(bot, tablePos) ? Phase.RECLAIM : null;
                 if (phase == null) return Status.SUCCESS;
                 wait = 2;
                 return Status.RUNNING;
@@ -218,23 +226,43 @@ public class CraftTask extends Task {
         }
     }
 
+    /** Head for the nearest remembered table within {@code within} that's still standing. */
+    private boolean useKnownTable(Bot bot, BlockPos me, double within) {
+        for (int tries = 0; tries < 4; tries++) {
+            var known = bot.memory().stations.stream()
+                    .filter(s -> "crafting_table".equals(s.type) && bot.dim().equals(s.at.dim) && !duds.contains(s.at.pos())
+                            && s.at.pos().closerThan(me, within))
+                    .min(java.util.Comparator.comparingDouble(s -> s.at.pos().distSqr(me)));
+            if (known.isEmpty()) return false;
+            BlockPos p = known.get().at.pos();
+            // out of loaded range we can't tell; go and see (OPEN gives up on one that isn't there)
+            if (!WorldView.loaded(p) || WorldView.state(p).getBlock() instanceof CraftingTableBlock) {
+                tablePos = p;
+                phase = Phase.OPEN;
+                ticks = 0;
+                return true;
+            }
+            bot.memory().removeStation(p);
+        }
+        return false;
+    }
+
+    /** At home or the team's base: a table put down there stays, for everyone's next craft. */
+    private static boolean atBase(Bot bot, BlockPos p) {
+        var home = bot.memory().home;
+        if (home != null && bot.dim().equals(home.dim) && home.pos().closerThan(p, 24)) return true;
+        BlockPos base = lol.zym.zymbot.brain.ClassPlan.teamHome(bot);
+        return base != null && base.closerThan(p, 24);
+    }
+
+    private boolean walked;
+
     /** Tables that wouldn't open for us this time: not tried again. */
     private final java.util.Set<BlockPos> duds = new java.util.HashSet<>();
 
     private Status station(Bot bot) {
         BlockPos me = bot.player().blockPosition();
-        var known = bot.memory().nearestStation("crafting_table", me, bot.dim(), 24);
-        if (known.isPresent() && duds.contains(known.get().at.pos())) known = java.util.Optional.empty();
-        if (known.isPresent()) {
-            BlockPos p = known.get().at.pos();
-            if (WorldView.state(p).getBlock() instanceof CraftingTableBlock) {
-                tablePos = p;
-                phase = Phase.OPEN;
-                ticks = 0;
-                return Status.RUNNING;
-            }
-            bot.memory().removeStation(p);
-        }
+        if (useKnownTable(bot, me, 16)) return Status.RUNNING;
         // a table standing right here at our own base (a teammate's): use it rather than place another
         for (BlockPos p : BlockPos.betweenClosed(me.offset(-4, -2, -4), me.offset(4, 2, 4))) {
             if (WorldView.state(p).getBlock() instanceof CraftingTableBlock && !bot.nearSomeoneElsesBuild(p) && !duds.contains(p)) {
@@ -245,6 +273,8 @@ public class CraftTask extends Task {
                 return Status.RUNNING;
             }
         }
+        // none on us: a table we know of further off is a walk, and cheaper than crafting another
+        if (!Inv.has(Items.CRAFTING_TABLE) && useKnownTable(bot, me, 64)) return Status.RUNNING;
         if (!Inv.has(Items.CRAFTING_TABLE)) {
             // ours, just broken back up and still lying on the ground: fetch it. (Not someone
             // else's standing table: Visual Workbench keeps their items in its grid.)
