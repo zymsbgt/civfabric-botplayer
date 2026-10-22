@@ -29,6 +29,11 @@ public final class ClassPlan {
 
     public static final List<Role> ROLES = List.of(
             new Role("grower", List.of("farmer", "medic", "hunter"), List.of("farmer", "medic")),
+            // the Smith stays home, so all three level at the base: Blacksmith smelts and crafts, Builder
+            // smelts stone, places bricks and planks and reinforces walls, Librarian crafts books and signs
+            // and later blesses gear. Ore, stone, logs and leather come in from teammates and boards.
+            // Builder is the only Builder on two slots, and boats need Builder 5 and Librarian 5 together.
+            // Farmer would also level at home but takes crops from the Grower; Miner and Hunter mean going out
             new Role("smith", List.of("blacksmith", "builder", "librarian"), List.of("blacksmith", "builder")),
             new Role("delver", List.of("miner", "hunter", "builder"), List.of("miner", "hunter")),
             new Role("scholar", List.of("librarian", "medic", "farmer"), List.of("librarian", "medic")));
