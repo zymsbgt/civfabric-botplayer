@@ -250,6 +250,20 @@ public final class ChestIndex {
         bot.memory().chests.remove(key(bot.dim(), pos));
     }
 
+    /**
+     * Records within 24 blocks whose spot holds no container: a chest broken since, or one heard of
+     * at the wrong place. Forgotten, so nobody walks to it. Called every ten seconds.
+     */
+    public static void dropMissing(Bot bot) {
+        BlockPos me = bot.player().blockPosition();
+        bot.memory().chests.values().removeIf(r -> {
+            if (r.at == null || !r.at.dim.equals(bot.dim()) || !r.at.pos().closerThan(me, 24) || !bot.level().isLoaded(r.at.pos())) return false;
+            if (bot.level().getBlockEntity(r.at.pos()) instanceof net.minecraft.world.Container) return false;
+            bot.event("no chest at " + r.at.pos().toShortString() + " any more: forgot it");
+            return true;
+        });
+    }
+
     /** What the hub shows teammates and leaders: each known chest and its top contents. */
     public static JsonArray summary(Bot bot) {
         JsonArray out = new JsonArray();

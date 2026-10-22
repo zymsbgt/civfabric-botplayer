@@ -59,6 +59,8 @@ public final class BotMemory {
     public static final class TeamHome {
         public Pos at;
         public String purpose;
+        /** Game time it was set or moved (0: before we kept it). Teammates take the newest on chat. */
+        public long set;
     }
 
     /** One remembered place. */

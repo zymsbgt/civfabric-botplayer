@@ -160,8 +160,10 @@ public final class ClassPlan {
         if (m.teamHomes.isEmpty() && isGrower(bot) && m.home != null && m.home.dim.equals(bot.dim())) {
             // bootstrap: our farm is the team's first base
             var h = new lol.zym.zymbot.memory.BotMemory.TeamHome();
-            h.at = m.home;
+            // a copy: the base moves only when someone moves it, never along with our home
+            h.at = new lol.zym.zymbot.memory.BotMemory.Pos(m.home.pos(), m.home.dim);
             h.purpose = "first farm";
+            h.set = bot.level().getGameTime();
             m.teamHomes.put("main", h);
             m.homeName = "main";
             m.save();
@@ -172,26 +174,40 @@ public final class ClassPlan {
         return h != null && h.at.dim.equals(bot.dim()) ? h.at.pos() : null;
     }
 
-    /** A new team with no bases yet takes the bootstrap "main" from the Grower in radio range. Nothing else is automatic. */
+    /**
+     * Bases from teammates' status lines. A bot with none takes all of them (a Grower founds its own
+     * instead); after that, a base a teammate has set or moved later than our record is taken, so a
+     * leader's {@code teamhome set} and the Grower moving the first farm reach the whole team.
+     */
     private static void learnTeamHome(Bot bot) {
         var mem = bot.memory();
-        if (!mem.teamHomes.isEmpty() || isGrower(bot)) return;
+        if (mem.teamHomes.isEmpty() && isGrower(bot)) return;
+        boolean first = mem.teamHomes.isEmpty(), changed = false;
         for (var m : bot.team().inRange()) {
             var homes = m.state().get("team_homes");
-            if (homes == null || !homes.isJsonObject() || homes.getAsJsonObject().size() == 0) continue;
+            if (homes == null || !homes.isJsonObject()) continue;
             for (var e : homes.getAsJsonObject().entrySet()) {
                 var o = e.getValue().getAsJsonObject();
+                long set = o.has("set") ? o.get("set").getAsLong() : 0;
+                var ours = mem.teamHomes.get(e.getKey());
+                if (!first && (ours == null ? set == 0 : set <= ours.set)) continue;
                 var h = new lol.zym.zymbot.memory.BotMemory.TeamHome();
                 h.at = new lol.zym.zymbot.memory.BotMemory.Pos(new net.minecraft.core.BlockPos(o.get("x").getAsInt(), o.get("y").getAsInt(),
                         o.get("z").getAsInt()), bot.dim());
-                h.purpose = o.has("purpose") ? o.get("purpose").getAsString() : null;
+                h.purpose = o.has("purpose") ? o.get("purpose").getAsString() : ours != null ? ours.purpose : null;
+                h.set = set;
                 mem.teamHomes.put(e.getKey(), h);
+                changed = true;
+                if (!first && (ours == null || !ours.at.pos().equals(h.at.pos())))
+                    bot.event("base \"" + e.getKey() + "\" is at " + h.at.pos().toShortString() + " now (from " + m.name() + ")");
             }
-            mem.homeName = mem.teamHomes.containsKey("main") ? "main" : mem.teamHomes.keySet().iterator().next();
-            mem.save();
-            bot.event("joined " + m.name() + "'s base \"" + mem.homeName + "\" at " + mem.teamHomes.get(mem.homeName).at.pos().toShortString());
-            return;
+            if (first && changed) {
+                mem.homeName = mem.teamHomes.containsKey("main") ? "main" : mem.teamHomes.keySet().iterator().next();
+                bot.event("joined " + m.name() + "'s base \"" + mem.homeName + "\" at " + mem.teamHomes.get(mem.homeName).at.pos().toShortString());
+                first = false;
+            }
         }
+        if (changed) mem.save();
     }
 
     /** Leaders, and Claude driving a bot directly, may set bases; nobody else. */

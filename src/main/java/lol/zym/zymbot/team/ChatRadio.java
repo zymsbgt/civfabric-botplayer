@@ -146,10 +146,20 @@ public final class ChatRadio {
         else if (bot.brain().workless()) b.append(" wl=1");
         List<String> classes = lol.zym.zymbot.brain.ClassPlan.classes(bot);
         if (!classes.isEmpty()) b.append(" cl=").append(String.join(",", classes));
+        // team bases, "main@76,62,376@k2f9@first_farm": where, when it was set (base 36 game time:
+        // teammates take the newest) and what for. Ours first, and only as many as fit the line
         if (!mem.teamHomes.isEmpty()) {
-            List<String> hs = new ArrayList<>();
-            mem.teamHomes.forEach((name, h) -> hs.add(name + "@" + h.at.x + "," + h.at.y + "," + h.at.z));
-            b.append(" h=").append(String.join(";", hs));
+            List<String> names = new ArrayList<>(mem.teamHomes.keySet());
+            if (mem.homeName != null && names.remove(mem.homeName)) names.add(0, mem.homeName);
+            String sep = " h=";
+            for (String name : names) {
+                var h = mem.teamHomes.get(name);
+                String one = name + "@" + h.at.x + "," + h.at.y + "," + h.at.z + "@" + Long.toString(h.set, 36)
+                        + (h.purpose == null ? "" : "@" + h.purpose.replace(' ', '_').replace(";", ""));
+                if (b.length() + sep.length() + one.length() > 250) continue;
+                b.append(sep).append(one);
+                sep = ";";
+            }
         }
         return b.toString();
     }
@@ -312,8 +322,12 @@ public final class ChatRadio {
                 case "h" -> {
                     JsonObject homes = new JsonObject();
                     for (String h : v.split(";")) {
-                        int at = h.indexOf('@');
-                        if (at > 0) homes.add(h.substring(0, at), xyz(h.substring(at + 1)));
+                        String[] hf = h.split("@", 4);
+                        if (hf.length < 2 || hf[0].isEmpty()) continue;
+                        JsonObject o = xyz(hf[1]);
+                        o.addProperty("set", hf.length > 2 ? Long.parseLong(hf[2], 36) : 0);
+                        if (hf.length > 3) o.addProperty("purpose", hf[3].replace('_', ' '));
+                        homes.add(hf[0], o);
                     }
                     s.add("team_homes", homes);
                 }

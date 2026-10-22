@@ -119,7 +119,10 @@ public class LayFieldTask extends Task {
         bot.event("no farmland by water near the base at " + mem.home.pos().toShortString() + ": moving the base to the water at " + water.toShortString());
         mem.home = at;
         var main = mem.teamHomes.get("main");
-        if (main != null) main.at = at;
+        if (main != null) {
+            main.at = new BotMemory.Pos(water, bot.dim());
+            main.set = bot.level().getGameTime();
+        }
         if (mem.bed != null && !mem.bed.pos().closerThan(water, 32)) {
             // the bed and settle steps make, place and claim a new one at the new base
             mem.bed = null;

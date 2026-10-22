@@ -18,7 +18,7 @@ import java.util.Map;
  * bot gets about one line every two seconds for everything it says, so chests go as changes and
  * answers, never whole inventories on a timer:
  * <ul>
- *   <li>{@code cc}: a chest's contents as counts, {@code ~zb cc main+3,0,-2 t=k2f9 f=12 bread=8,coal=0}.
+ *   <li>{@code cc}: a chest's contents as counts, {@code ~zb cc 79,62,374 t=k2f9 f=12 bread=8,coal=0}.
  *       Without {@code p=} it updates only the items it names (0: none left), so it can be split
  *       anywhere; with {@code p=1/3} it's one line of a full listing, which replaces the record once
  *       every part is in. Said after we change a chest of ours, and in answer to the two below.</li>
@@ -27,8 +27,8 @@ import java.util.Map;
  *       hear an answer.</li>
  *   <li>{@code ls <place>}: the full listing of a chest, asked by a bot at a base it has no record of.</li>
  * </ul>
- * Places are counted from the nearest team base by name ("main+3,0,-2"), absolute only with no base
- * near, so an overheard line tells a stranger little. The {@code t=} is the game time the chest was
+ * Places are absolute: counted from a base, they came out a block off whenever two bots' records of
+ * that base differed. The {@code t=} is the game time the chest was
  * seen (base 36), the same clock for every bot: the newest record wins. Chest lines go out only when
  * nothing else is waiting, and wait while anyone not on the team is in sight.
  */
@@ -220,35 +220,17 @@ public final class ChestRadio {
 
     // ---- places -----------------------------------------------------------------------
 
-    /** "main+3,0,-2" from the nearest team base within 64 blocks, else "x,y,z". */
+    /** "x,y,z". */
     static String place(Bot bot, BlockPos p) {
-        String best = null;
-        double bestD = 64 * 64;
-        BlockPos base = null;
-        for (var e : bot.memory().teamHomes.entrySet()) {
-            var at = e.getValue().at;
-            if (at == null || !at.dim.equals(bot.dim()) || !e.getKey().matches("[A-Za-z0-9_-]+")) continue;
-            double d = at.pos().distSqr(p);
-            if (d < bestD) {
-                bestD = d;
-                best = e.getKey();
-                base = at.pos();
-            }
-        }
-        if (best == null) return p.getX() + "," + p.getY() + "," + p.getZ();
-        return best + "+" + (p.getX() - base.getX()) + "," + (p.getY() - base.getY()) + "," + (p.getZ() - base.getZ());
+        return p.getX() + "," + p.getY() + "," + p.getZ();
     }
 
-    /** The other way; null for a base we don't know. */
+    /** The other way; null for anything else, such as a place counted from a base by an older build. */
     static BlockPos pos(Bot bot, String s) {
         try {
-            int plus = s.indexOf('+');
-            String[] c = (plus >= 0 ? s.substring(plus + 1) : s).split(",");
+            String[] c = s.split(",");
             if (c.length != 3) return null;
-            BlockPos off = new BlockPos(Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]));
-            if (plus < 0) return off;
-            var h = bot.memory().teamHomes.get(s.substring(0, plus));
-            return h == null || h.at == null || !h.at.dim.equals(bot.dim()) ? null : h.at.pos().offset(off);
+            return new BlockPos(Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2]));
         } catch (NumberFormatException e) {
             return null;
         }

@@ -274,6 +274,7 @@ public final class Commands {
                         var h = new BotMemory.TeamHome();
                         h.at = new BotMemory.Pos(at, bot.dim());
                         h.purpose = a.length > next ? String.join(" ", java.util.Arrays.copyOfRange(a, next, a.length)) : null;
+                        h.set = bot.level().getGameTime();
                         mem.teamHomes.put(a[2], h);
                         if (mem.homeName == null) mem.homeName = a[2];
                         mem.save();
