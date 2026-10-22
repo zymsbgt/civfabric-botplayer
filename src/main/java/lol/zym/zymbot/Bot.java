@@ -554,6 +554,16 @@ public final class Bot {
             // a status line heard on chat can be a couple of minutes old
             long ago = m.state().has("heard_ms") ? m.state().get("heard_ms").getAsLong() / 50 : 0;
             memory.saw(m.name(), BlockPos.containing(m.x(), m.y(), m.z()), m.dim(), now - ago, m.name());
+            // "x, y, z" on the hub and the chat radio alike
+            var h = m.state().get("home");
+            String[] c = h != null && h.isJsonPrimitive() ? h.getAsString().split(",\\s*") : new String[0];
+            if (c.length == 3) {
+                try {
+                    memory.playerHomes.put(m.name().toLowerCase(Locale.ROOT),
+                            new BotMemory.Pos(new BlockPos(Integer.parseInt(c[0]), Integer.parseInt(c[1]), Integer.parseInt(c[2])), m.dim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
         }
     }
 
@@ -1096,6 +1106,9 @@ public final class Bot {
         o.add("team_heard", heardMates);
         o.add("help_heard", team.radio().helpHeard());
         o.add("help_recalled", team.radio().helpRecalled());
+        JsonArray errands = new JsonArray();
+        brain.errands().forEach(errands::add);
+        o.add("errands", errands);
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));
         o.add("landmarks", lol.zym.zymbot.memory.Landmarks.summary(this, 40));
         JsonObject homes = new JsonObject();

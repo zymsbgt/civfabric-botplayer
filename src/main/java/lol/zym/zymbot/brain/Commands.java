@@ -30,7 +30,7 @@ public final class Commands {
 
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
-            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "goto", "home",
+            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
             "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
@@ -154,7 +154,13 @@ public final class Commands {
                 }
                 case "stop", "clear" -> {
                     bot.brain().clearJob();
-                    return "job cleared";
+                    int n = bot.brain().clearErrands(bot);
+                    return "job cleared" + (n > 0 ? ", and " + n + " set aside" : "");
+                }
+                case "errands" -> {
+                    // jobs set aside until a player turns up (or a more urgent errand is done)
+                    List<String> es = bot.brain().errands();
+                    return es.isEmpty() ? "nothing set aside" : String.join("; ", es);
                 }
                 case "role" -> {
                     Bot.Role r = Bot.Role.parse(a.length > 1 ? a[1] : "");

@@ -214,6 +214,8 @@ public final class BotMemory {
 
     /** The last place we know each player was: name (lower case) -> sighting. */
     public Map<String, Sighting> sightings = new LinkedHashMap<>();
+    /** Each teammate's home, as it last told us: name (lower case) -> where. Where to look for one gone missing. */
+    public Map<String, Pos> playerHomes = new LinkedHashMap<>();
 
     private transient Path file;
 

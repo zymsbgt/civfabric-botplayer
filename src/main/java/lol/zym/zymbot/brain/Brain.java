@@ -203,9 +203,14 @@ public final class Brain {
             return;
         }
 
+        if (!errands.isEmpty() && bot.ticks() % 20 == 0) checkErrands(bot);
         if (job != null) {
             pause(bot, Layer.JOB);
             Task.Status s = job.tick(bot);
+            if (asideFor != null) {
+                setJobAside(bot);
+                return;
+            }
             if (s != Task.Status.RUNNING) {
                 String result = s == Task.Status.SUCCESS ? "done: " + job.name() : "failed: " + job.failureReason();
                 if (s == Task.Status.FAILURE && job instanceof BoardJobTask b) skipPosts.put(b.postId(), System.currentTimeMillis() + 10 * 60_000L);
@@ -450,6 +455,128 @@ public final class Brain {
 
     /** Milestones that failed several times running: past three, the bot asks Claude. */
     private final java.util.Map<String, Integer> failStreak = new java.util.HashMap<>();
+
+    // ---- errands -----------------------------------------------------------------------
+
+    /**
+     * A job set aside until it can go on: a delivery to (or a meeting with) a player nobody can find,
+     * or a job a more urgent errand interrupted. We get on with our own goals meanwhile, watching for
+     * the player. Each has a priority, and the brain works on the most urgent thing that can go ahead:
+     * a delivery whose player has turned up (a quick handoff while they're here) over a job, a job over
+     * our own goals.
+     */
+    private static final class Errand {
+        final Task task;
+        final String source, repeat, player;
+        /** The newest sighting of the player when we set it aside: anything newer is a lead. */
+        final long sightingTick;
+        final long until;
+        final int priority;
+        final java.util.Map<String, Long> asked = new java.util.HashMap<>();
+
+        Errand(Task task, String source, String repeat, String player, long sightingTick, long until, int priority) {
+            this.task = task;
+            this.source = source;
+            this.repeat = repeat;
+            this.player = player;
+            this.sightingTick = sightingTick;
+            this.until = until;
+            this.priority = priority;
+        }
+
+        String describe() {
+            return task.name() + (player != null ? " (waiting for " + player + ")" : priority == JOB_PRIORITY ? " (set aside)" : "");
+        }
+    }
+
+    /** A delivery whose player has turned up; a job; our own goals and wandering. */
+    private static final int FOUND_PRIORITY = 70, JOB_PRIORITY = 50, OWN_PRIORITY = 30;
+    private final List<Errand> errands = new java.util.ArrayList<>();
+    private String asideFor;
+    private long asideTick;
+
+    /**
+     * A search inside our job has run out of leads: set the job aside (after this tick) until the
+     * player turns up. False when the search isn't part of a job, which then just fails.
+     */
+    public boolean setAside(Task seeker, String player, long newestSighting) {
+        if (active != Layer.JOB || job == null || !job.inChain(t -> t == seeker)) return false;
+        asideFor = player;
+        asideTick = newestSighting;
+        return true;
+    }
+
+    private void setJobAside(Bot bot) {
+        errands.add(new Errand(job, jobSource, repeatCmd, asideFor, asideTick, System.currentTimeMillis() + 30 * 60_000L, FOUND_PRIORITY));
+        bot.event("can't find " + asideFor + ": setting \"" + job.name() + "\" aside and back to work, watching for them");
+        bot.reply(jobSource, "job waiting: can't find " + asideFor + "; I'll finish it when they turn up (30 min)");
+        job.stop(bot);
+        job = null;
+        jobSource = null;
+        repeatCmd = null;
+        asideFor = null;
+    }
+
+    /** Drop errands past their time, ask passing teammates after missing players, and take up the most urgent ready one. */
+    private void checkErrands(Bot bot) {
+        long now = System.currentTimeMillis();
+        for (var it = errands.iterator(); it.hasNext(); ) {
+            Errand e = it.next();
+            if (now <= e.until) continue;
+            it.remove();
+            if (e.task instanceof BoardJobTask b) b.abandon(bot);
+            bot.event("gave up waiting" + (e.player != null ? " for " + e.player : "") + ": " + e.task.name());
+            bot.reply(e.source, "job failed: " + (e.player != null ? e.player + " never turned up" : "set aside too long"));
+        }
+        Errand ready = null;
+        for (Errand e : errands) {
+            if (e.player != null) {
+                var s = bot.memory().sighting(e.player);
+                SeekTask.askAround(bot, e.player, s == null ? -1 : s.tick, e.asked);
+                boolean lead = bot.findPlayer(e.player) != null
+                        || s != null && s.tick > e.sightingTick && s.at.dim.equals(bot.dim());
+                if (!lead) continue;
+            }
+            if (ready == null || e.priority > ready.priority) ready = e;
+        }
+        if (ready == null || ready.priority <= (job != null ? JOB_PRIORITY : OWN_PRIORITY)) return;
+        errands.remove(ready);
+        if (job != null) {
+            bot.event("setting \"" + job.name() + "\" aside for " + ready.describe());
+            errands.add(new Errand(job, jobSource, repeatCmd, null, 0, now + 60 * 60_000L, JOB_PRIORITY));
+            job.stop(bot);
+        }
+        job = ready.task;
+        jobSource = ready.source;
+        repeatCmd = ready.repeat;
+        bot.event((ready.player != null ? ready.player + " is about: " : "") + "back to " + job.name());
+    }
+
+    /**
+     * Something to do as soon as it outranks what we're on ({@code priority}: our own goals are 30,
+     * a job 50): a chest of ours a player has been into, looked in again at 40.
+     */
+    public void addErrand(Task task, String source, int priority, long forMillis) {
+        if (errands.stream().anyMatch(e -> e.task.name().equals(task.name()))) return;
+        errands.add(new Errand(task, source, null, null, 0, System.currentTimeMillis() + forMillis, priority));
+    }
+
+    /** What's set aside, for "errands" and our state. */
+    public List<String> errands() {
+        return errands.stream().map(e -> e.describe() + ", " + Math.max(0, (e.until - System.currentTimeMillis()) / 60_000) + " min left").toList();
+    }
+
+    /** Drop every errand ("stop"): their sources are told. */
+    public int clearErrands(Bot bot) {
+        int n = errands.size();
+        for (Errand e : errands) {
+            if (e.task instanceof BoardJobTask b) b.abandon(bot);
+            e.task.stop(bot);
+            bot.reply(e.source, "job cleared while waiting: " + e.task.name());
+        }
+        errands.clear();
+        return n;
+    }
     /** The food swap we're making, and when to look for the next. */
     private FoodShare.Gift gift;
     private long noShareUntil;

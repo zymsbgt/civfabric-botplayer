@@ -119,6 +119,8 @@ public final class ChatRadio {
         b.append(" d=").append(bot.dim());
         b.append(" p=").append(p.getBlockX()).append(',').append(p.getBlockY()).append(',').append(p.getBlockZ());
         b.append(" fp=").append(lol.zym.zymbot.brain.Progression.farmPlots(bot));
+        // our home: where a teammate looking for us tries when we're nowhere it last saw us
+        if (mem.home != null) b.append(" hm=").append(mem.home.x).append(',').append(mem.home.y).append(',').append(mem.home.z);
         // paused, or with nothing to do: teammates tell the hub, and Claude gets a bot back to work
         if (!bot.enabled()) b.append(" en=0");
         else if (bot.brain().workless()) b.append(" wl=1");
@@ -275,6 +277,7 @@ public final class ChatRadio {
                 case "d" -> s.addProperty("dim", v);
                 case "p" -> s.add("pos", xyz(v));
                 case "fp" -> s.addProperty("farm_plots", Integer.parseInt(v));
+                case "hm" -> s.addProperty("home", v.replace(",", ", "));
                 case "en" -> s.addProperty("enabled", !"0".equals(v));
                 case "wl" -> s.addProperty("workless", "1".equals(v));
                 case "cl" -> {
