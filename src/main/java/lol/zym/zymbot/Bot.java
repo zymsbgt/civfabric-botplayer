@@ -375,25 +375,18 @@ public final class Bot {
     }
 
     /**
-     * Send a command over the team radio to one bot or "all" within range: as a chat line (the server
-     * carries it 150 blocks), or through the hub (which enforces the same range) with chatRadio off.
+     * Send a command over the team radio to one bot or "all" within range: a chat line, which the
+     * server carries 150 blocks. Bots talk over chat only (the user's rule: the hub is for job boards,
+     * updates and Claude, never bot to bot).
      */
     public String radio(String to, String text) {
         boolean all = to.equalsIgnoreCase("all") || to.equalsIgnoreCase("bots");
         if (!all && team.member(to).isEmpty())
             return to + " is out of radio range (" + BotConfig.get().commsRange + " blocks) or offline";
-        if (BotConfig.get().chatRadio) {
-            String target = all ? "all" : team.member(to).get().name();
-            team.radio().say("zb " + target + " " + text);
-            event("radio '" + text + "' -> " + target + " (chat)");
-            return "sending to " + target;
-        }
-        if (!team.connected()) return "team hub unreachable: " + team.lastError();
-        team.send(all ? "all" : team.member(to).get().name(), text, null, r -> {
-            if (r.has("sent")) event("radio '" + text + "' -> " + r.get("sent") + (r.has("dropped") && !r.getAsJsonArray("dropped").isEmpty() ? " dropped " + r.get("dropped") : ""));
-            else event("radio failed: " + r.get("error"));
-        });
-        return "sending to " + to;
+        String target = all ? "all" : team.member(to).get().name();
+        team.radio().say("zb " + target + " " + text);
+        event("radio '" + text + "' -> " + target + " (chat)");
+        return "sending to " + target;
     }
 
     /** Named in our config's teammates: the only ones whose radio lines we take in. */

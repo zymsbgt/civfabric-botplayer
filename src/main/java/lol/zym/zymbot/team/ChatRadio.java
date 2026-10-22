@@ -78,7 +78,6 @@ public final class ChatRadio {
 
     /** Send what's waiting, and our status and forecasts when they're due. On the client thread. */
     public void tick(Bot bot) {
-        if (!BotConfig.get().chatRadio) return;
         long now = System.currentTimeMillis();
         String beacon = beacon(bot);
         // the position is the one part that changes all the time: not a reason to speak early

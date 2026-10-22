@@ -21,12 +21,13 @@ import java.util.function.Consumer;
 /**
  * Client for the team hub ({@code hub/zymbot-hub.mjs}), which bots on any machine share.
  *
- * <p>Bots also talk over server chat ({@link ChatRadio}), which needs no hub; teammates either
- * way show up in {@link #inRange}. The hub is the referee for the rule that bots more than 150
- * blocks apart can't communicate: it only delivers messages, shows teammates and lets bots use job boards within
- * range of their last reported position. This client never blocks the game thread; a
- * background loop publishes state and pulls the inbox and the "what's near me" view once a
- * second, and results are handed back on the client thread.
+ * <p>Bots talk to each other over server chat only ({@link ChatRadio}): the user's rule, 2026-10-22.
+ * The hub is for job boards (usable within 150 blocks of a bot's last reported position), jar
+ * updates, and Claude: our published state is Claude's view of us and the source of its alerts, and
+ * the inbox carries Claude's commands to a leader. It also vouches for who is on the team. This client
+ * never blocks the game thread; a background loop publishes state and pulls the inbox and the
+ * "what's near me" view (boards, team names) once a second, and results are handed back on the
+ * client thread.
  */
 public final class TeamBus {
     public record Message(String id, String from, String via, String text, long ts) {}
@@ -71,7 +72,6 @@ public final class TeamBus {
     /** Bots the hub has shown us: they had the hub's token, so they're the team's. */
     private final Set<String> hubSeen = ConcurrentHashMap.newKeySet();
     private volatile JsonObject pendingState;
-    private volatile List<Member> nearby = List.of();
     private volatile List<JsonObject> boards = List.of();
     private volatile boolean connected;
     private volatile String lastError = "not connected yet";
@@ -125,14 +125,12 @@ public final class TeamBus {
             lastSeq = last;
             JsonObject nb = get("/nearby");
             if (nb.has("ok") && nb.get("ok").getAsBoolean()) {
-                List<Member> ms = new ArrayList<>();
+                // who the hub vouches for (they had its token): their chat lines are the team's
                 for (JsonElement e : nb.getAsJsonArray("members")) {
                     JsonObject o = e.getAsJsonObject();
-                    ms.add(new Member(o.get("name").getAsString(), o));
                     everSeen.add(o.get("name").getAsString());
                     hubSeen.add(o.get("name").getAsString().toLowerCase(java.util.Locale.ROOT));
                 }
-                nearby = ms;
                 List<JsonObject> bs = new ArrayList<>();
                 for (JsonElement e : nb.getAsJsonArray("boards")) bs.add(e.getAsJsonObject());
                 boards = bs;
@@ -255,15 +253,12 @@ public final class TeamBus {
     }
 
     /**
-     * Teammates within radio range right now: those the hub reports, and those heard on chat
-     * lately. The hub's view of one wins: it's a second old, a status line up to a minute.
+     * Teammates within radio range right now: those heard on chat lately. Bots talk over chat only
+     * (the user's rule, 2026-10-22), so what the hub shows of them never stands in for it; the hub
+     * only vouches for who is on the team ({@link #hubKnows}).
      */
     public List<Member> inRange() {
-        List<Member> out = new ArrayList<>(nearby);
-        for (Member m : radio.members(Bot.get())) {
-            if (out.stream().noneMatch(o -> o.name().equalsIgnoreCase(m.name()))) out.add(m);
-        }
-        return out;
+        return radio.members(Bot.get());
     }
 
     /** Every bot name seen in range this session (for recognising names in chat). */

@@ -47,7 +47,7 @@ public final class BotConfig {
     /**
      * Team hub every bot connects to (hub/zymbot-hub.mjs), on this machine or another. Several,
      * comma-separated, are tried in turn until one answers (a machine that moves between networks).
-     * "off" for none: the team then talks over chat only (see chatRadio), with no boards or updates.
+     * "off" for none: no boards or updates then (the team talks over chat either way).
      */
     public String hubUrl = "http://127.0.0.1:25599";
 
@@ -70,12 +70,11 @@ public final class BotConfig {
     public Map<String, String> serverAliases = new LinkedHashMap<>();
 
     /**
-     * Talk to teammates over server chat: commands, a status line, forecasts. Chat reaches 150
-     * blocks on this server, the team's own range, so the hub becomes optional (Claude's view of a
-     * leader, job boards and updates still go through it). Players nearby see the lines.
-     */
-    public boolean chatRadio = true;
-    /** How often the status line goes out on chat; a teammate quiet for three of these is out of range. */
+     * Bots talk to teammates over server chat only (commands, status, forecasts, food, chests): chat
+     * reaches 150 blocks on this server, the team's own range. The hub is for job boards, updates and
+     * Claude's view of a leader. Players nearby see the lines.
+     *
+     * How often the status line goes out on chat; a teammate quiet for three of these is out of range. */
     public int chatBeaconSeconds = 60;
 
     /**
