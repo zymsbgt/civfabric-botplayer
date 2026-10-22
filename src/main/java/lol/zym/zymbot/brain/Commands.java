@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -112,6 +112,12 @@ public final class Commands {
                         }
                     }
                     return sb.toString();
+                }
+                case "navdebug" -> {
+                    // debugging aid: Baritone's path calculations and failures, into the game log as [baritone]
+                    boolean on = a.length < 2 || !a[1].equalsIgnoreCase("off");
+                    baritone.api.BaritoneAPI.getSettings().chatDebug.value = on;
+                    return "Baritone debug output " + (on ? "on (game log, [baritone])" : "off");
                 }
                 case "map" -> {
                     // debugging aid: a slice from above per layer, y-2 .. y+3, around a spot (default us).
