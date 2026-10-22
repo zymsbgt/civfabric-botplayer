@@ -130,11 +130,28 @@ public final class Progression {
         return n;
     }
 
+    private static boolean farmsAtHome(Bot bot) {
+        return ClassPlan.isGrower(bot) && bot.memory().home != null && farmPlots(bot) > 0;
+    }
+
     /** The Grower takes its provisions from the farm; everyone else hunts and forages. */
     private static Task provision(Bot bot) {
-        if (ClassPlan.isGrower(bot) && bot.memory().home != null && farmPlots(bot) > 0) return new FarmTask(bot.memory().home.pos(), 10, 8);
+        long now = System.currentTimeMillis();
+        // a shift at the farm that didn't fill the pack means it's growing or its soil is resting
+        // (Bot5's wheat): food from elsewhere meanwhile, not the same empty field every 10 minutes
+        if (farmsAtHome(bot) && now - farmedAt > 15 * 60_000L) {
+            farmedAt = now;
+            return new FarmTask(bot.memory().home.pos(), 10, 8);
+        }
+        // hurt: no hunting, but fishing by the farm is as quiet as farming it
+        if (bot.health().fragile(bot)) {
+            return FishTask.canFish(bot) && bot.memory().home != null
+                    ? new FishTask(bot.memory().home.pos(), () -> foodPoints() >= FOOD_POINTS, 8) : null;
+        }
         return food(bot);
     }
+
+    private static long farmedAt;
 
     /** Planted plots that make a farm worth calling one. */
     public static final int FARM_PLOTS = 16;

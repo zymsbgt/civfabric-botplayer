@@ -54,6 +54,11 @@ public final class Nav {
         // spawners: what they make attacks pacifists, so paths give them a wide berth (Baritone's default is 2x)
         s.mobSpawnerAvoidanceRadius.value = 16;
         s.mobSpawnerAvoidanceCoefficient.value = 5.0;
+        // a lit campfire burns whoever walks over it, and every warm bed has one beside it: Bot1 lost
+        // health on the way into its own bed. Baritone avoids fire, not campfires or magma
+        for (var b : java.util.List.of(net.minecraft.world.level.block.Blocks.CAMPFIRE, net.minecraft.world.level.block.Blocks.SOUL_CAMPFIRE,
+                net.minecraft.world.level.block.Blocks.MAGMA_BLOCK))
+            if (!s.blocksToAvoid.value.contains(b)) s.blocksToAvoid.value.add(b);
         s.antiCheatCompatibility.value = true;
         s.renderPath.value = true;
         s.chatDebug.value = false;

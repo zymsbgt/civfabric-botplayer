@@ -945,6 +945,7 @@ public final class Bot {
         }
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
+        o.addProperty("food_points", lol.zym.zymbot.brain.Progression.foodPoints());
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));
         o.add("landmarks", lol.zym.zymbot.memory.Landmarks.summary(this, 40));
         JsonObject homes = new JsonObject();
