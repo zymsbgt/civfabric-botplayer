@@ -122,13 +122,13 @@ public final class Progression {
     public static final int FOOD_POINTS = 80;
 
     /** Hunger points of the safe food we carry, each at the game's own value, raw meat as cooked. */
+    /**
+     * Hunger our food will really give us: Spice of Fabric cuts each repeat of a food by 0.7 (going by
+     * what this player ate lately), so eight cooked rabbit are worth about 15, not 40. A mix is worth
+     * more than a pile; the provisions goal counts what we'd actually get.
+     */
     public static int foodPoints() {
-        int n = 0;
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = lol.zym.zymbot.inv.Diet.asEaten(Inv.inv().getItem(i));
-            if (Inv.food(s) != null && !Inv.riskyFood(s)) n += lol.zym.zymbot.inv.Diet.baseHunger(s) * s.getCount();
-        }
-        return n;
+        return (int) Math.round(lol.zym.zymbot.inv.Diet.stockValue(b()));
     }
 
     private static boolean farmsAtHome(Bot bot) {
