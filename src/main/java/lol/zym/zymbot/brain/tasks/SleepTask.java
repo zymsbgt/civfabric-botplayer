@@ -27,6 +27,7 @@ public class SleepTask extends Task {
     private long clickedAt = -1;
     private int clicks;
     private boolean read;
+    private BlockPos stand;
     private lol.zym.zymbot.control.Breaker clearing;
     private int cleared;
 
@@ -69,8 +70,12 @@ public class SleepTask extends Task {
             clickedAt = -1;
         }
         if (!inBedRange(p.position())) {
-            Nav.goToBlock(bed);
-            if (ticks > 20 * 120) return fail("can't reach bed");
+            // a spot to stand on that passes vanilla's range test: "next to the bed" to Baritone
+            // includes right under it, where Bot2 stood in a hole below its bed until it gave up
+            if (stand == null || ticks % 100 == 0) stand = standingSpot(p.blockPosition());
+            if (stand != null) Nav.goTo(new baritone.api.pathing.goals.GoalBlock(stand));
+            else Nav.goToBlock(bed);
+            if (ticks > 20 * 120) return fail("can't reach bed" + (stand == null ? " (nowhere to stand beside it)" : ""));
             return Status.RUNNING;
         }
         Nav.stop();
@@ -104,6 +109,25 @@ public class SleepTask extends Task {
         read = false;
         clicks++;
         return Status.RUNNING;
+    }
+
+    /** The nearest place to stand from which the bed can be used, or null. */
+    private BlockPos standingSpot(BlockPos from) {
+        var st = WorldView.state(bed);
+        BlockPos other = st.getBlock() instanceof BedBlock ? bed.relative(BedBlock.getConnectedDirection(st)) : bed;
+        BlockPos best = null;
+        double bestD = Double.MAX_VALUE;
+        for (BlockPos q : BlockPos.betweenClosed(bed.offset(-3, -1, -3), bed.offset(3, 1, 3))) {
+            if (q.equals(bed) || q.equals(other) || !WorldView.standable(q) || WorldView.water(q)) continue;
+            Vec3 at = Vec3.atBottomCenterOf(q);
+            if (!near(at, bed) && !near(at, other)) continue;
+            double d = q.distSqr(from);
+            if (d < bestD) {
+                bestD = d;
+                best = q.immutable();
+            }
+        }
+        return best;
     }
 
     /** The first thing in the two blocks over either half of the bed that we may break, or null. */
