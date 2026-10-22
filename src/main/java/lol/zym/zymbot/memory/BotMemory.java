@@ -81,6 +81,8 @@ public final class BotMemory {
         public boolean lootr;
         /** Next to villagers or someone else's build: look, don't take. */
         public boolean offLimits;
+        /** Empty slots when last seen open; -1 if never counted. 0: full, a stash goes elsewhere. */
+        public int free = -1;
     }
 
     public static final class RosterEntry {

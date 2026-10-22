@@ -18,6 +18,16 @@ import net.minecraft.world.item.Items;
 public class StorageTask extends Task {
     private BlockPos placed;
     private BlockPos spot;
+    /** Where the chest goes near; null: home. */
+    private final BlockPos near;
+
+    public StorageTask() {
+        this(null);
+    }
+
+    public StorageTask(BlockPos near) {
+        this.near = near;
+    }
 
     @Override
     public String name() {
@@ -31,7 +41,7 @@ public class StorageTask extends Task {
             return s == Status.FAILURE ? s : Status.RUNNING;
         }
         var home = bot.memory().home;
-        if (home == null) return fail("no home yet");
+        if (near == null && home == null) return fail("no home yet");
         if (placed != null) {
             if (WorldView.state(placed).is(net.minecraft.world.level.block.Blocks.CHEST)) {
                 ChestIndex.markOurs(bot, placed);
@@ -44,10 +54,11 @@ public class StorageTask extends Task {
             return Status.RUNNING;
         }
         if (!Inv.has(Items.CHEST)) {
-            setChild(bot, new ObtainTask(ItemTarget.of(Items.CHEST, 1)));
+            // planks, then the chest, are crafted in the pack: a full one makes room first
+            setChild(bot, Inv.freeSlots() < 2 ? new DropJunkTask(2) : new ObtainTask(ItemTarget.of(Items.CHEST, 1)));
             return Status.RUNNING;
         }
-        BlockPos h = home.pos();
+        BlockPos h = near != null ? near : home.pos();
         if (spot == null || !WorldView.state(spot).isAir()) {
             spot = null;
             // nearest dry, open spot that isn't the field: home may be the farm's water itself
@@ -68,8 +79,10 @@ public class StorageTask extends Task {
             }
             if (spot == null) return fail("nowhere to put a chest at home");
         }
-        if (!lol.zym.zymbot.control.Breaker.inReach(spot)) {
-            Nav.goNear(spot, 2);
+        // close enough to click the face we'd place against, not just the spot's middle: half a block
+        // short of that, Bot2 stood a minute failing to place ("nowhere to put a chest at home")
+        if (!Placer.placeable(spot)) {
+            Nav.goNear(spot, 1);
             if (ticks > 20 * 120) return fail("couldn't get to the chest spot");
             return Status.RUNNING;
         }

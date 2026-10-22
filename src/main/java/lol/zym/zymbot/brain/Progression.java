@@ -70,8 +70,9 @@ public final class Progression {
                 b -> new GiveTask(grower(b), new ItemTarget("seeds", Progression::plantable, List.of(), seedCount())));
         // a chest at home: somewhere for the chest index to point at, and free while classless
         add("storage", () -> b().memory().home == null || ownChestNearHome(b()), b -> new StorageTask());
-        // pack filling up: surplus goes in the home chest, where the index will find it again
-        add("stash", () -> Inv.freeSlots() >= 8 || stashChest(b()) == null || surplus() == null, Progression::stash);
+        // pack filling up: junk out, the rest into a chest at home (made if there's none with room),
+        // where the index will find it again. Keep says which is which
+        add("stash", () -> Inv.freeSlots() >= 8 || lol.zym.zymbot.inv.Keep.surplus(b()).isEmpty(), Progression::stash);
         // a bed in whatever colour we have 3 wool of; shear for it (wooden shears, no class) otherwise
         add("bed", () -> b().memory().bed != null || Inv.find(s -> s.is(ItemTags.BEDS)) >= 0, Progression::bed);
         add("settle", () -> b().memory().bed != null, b -> new SettleTask());
@@ -328,37 +329,40 @@ public final class Progression {
         return new ShearTask(3);
     }
 
-    private static BlockPos stashChest(Bot bot) {
-        if (bot.memory().home == null) return null;
-        BlockPos home = bot.memory().home.pos();
-        return bot.memory().chests.values().stream().filter(r -> r.ours && r.at != null && r.at.pos().closerThan(home, 32))
-                .map(r -> r.at.pos()).findFirst().orElse(null);
+    /** Where our things are kept: home, else the team's base, else nowhere yet (a chest goes where we stand). */
+    private static BlockPos stashBase(Bot bot) {
+        if (bot.memory().home != null && bot.memory().home.dim.equals(bot.dim())) return bot.memory().home.pos();
+        return ClassPlan.teamHome(bot);
     }
 
-    /** The biggest pile of something we don't need on us: not food, tools, seeds or kept items. */
-    private static Item surplus() {
-        java.util.Map<Item, Integer> counts = new java.util.HashMap<>();
-        for (int i = 0; i < 36; i++) {
-            ItemStack st = Inv.inv().getItem(i);
-            if (st.isEmpty() || st.isDamageableItem() || Inv.isFood(st) || plantable(st) || st.is(ItemTags.BEDS)) continue;
-            if (BotConfig.get().keepItems.contains(Inv.id(st.getItem()))) continue;
-            counts.merge(st.getItem(), st.getCount(), Integer::sum);
-        }
-        // keep a stack of scaffolding on us
-        counts.computeIfPresent(Items.DIRT, (k, v) -> v > 64 ? v - 64 : null);
-        counts.computeIfPresent(Items.COBBLESTONE, (k, v) -> v > 64 ? v - 64 : null);
-        // a nearly full pack takes the small piles too: a full one ends every farming shift at once
-        int least = Inv.freeSlots() <= 3 ? 1 : 8;
-        return counts.entrySet().stream().filter(e -> e.getValue() >= least).max(java.util.Map.Entry.comparingByValue())
-                .map(java.util.Map.Entry::getKey).orElse(null);
+    /** A chest of ours by the base (or by us, with no base) that isn't known to be full. */
+    private static BlockPos stashChest(Bot bot) {
+        BlockPos base = stashBase(bot);
+        BlockPos at = base != null ? base : bot.player().blockPosition();
+        int reach = base != null ? 32 : 48;
+        return bot.memory().chests.values().stream()
+                .filter(r -> r.ours && r.free != 0 && r.at != null && r.at.dim.equals(bot.dim()) && r.at.pos().closerThan(at, reach))
+                .map(r -> r.at.pos()).min(java.util.Comparator.comparingDouble(c -> c.distSqr(at))).orElse(null);
+    }
+
+    /**
+     * Stashing failed lately (no chest, can't make one, can't reach it): only then may stored things be
+     * dropped. A failure snoozes it for 10 minutes; the 1-minute snooze of a stash that ended at once
+     * (dropping junk takes a second) is no sign of trouble.
+     */
+    public boolean stashStuck() {
+        return snoozed.getOrDefault("stash", 0L) - System.currentTimeMillis() > 2 * 60_000L;
     }
 
     private static Task stash(Bot bot) {
-        Item it = surplus();
+        // junk needs no walk home: drop it here
+        if (lol.zym.zymbot.inv.Keep.any(bot, lol.zym.zymbot.inv.Keep.Fate.JUNK)) return new DropJunkTask();
         BlockPos chest = stashChest(bot);
-        if (it == null || chest == null) return null;
-        int keep = it == Items.DIRT || it == Items.COBBLESTONE ? 64 : 0;
-        return new DepositTask(chest, ItemTarget.of(it, Inv.count(it) - keep));
+        if (chest != null) return new StashTask(chest);
+        // none, or every one full: another chest by the base, or here
+        BlockPos base = stashBase(bot);
+        bot.event("no chest with room" + (base != null ? " at the base" : "") + ": making one");
+        return new StorageTask(base != null ? base : bot.player().blockPosition());
     }
 
     /** While the farm isn't there yet: the Grower makes or tends it, everyone else fills their pack. */
@@ -513,8 +517,16 @@ public final class Progression {
     /** The next milestone, or with {@code safeOnly} the next one a fragile bot may do. */
     public Milestone next(boolean safeOnly) {
         long now = System.currentTimeMillis();
+        // a full pack fails every craft and pickup, whatever comes first on the ladder: room first
+        if (Inv.freeSlots() == 0) {
+            for (Milestone m : ladder) {
+                if (m.id().equals("stash") && !m.done().getAsBoolean() && snoozed.getOrDefault("stash", 0L) <= now) return m;
+            }
+        }
         for (Milestone m : ladder) {
-            if (safeOnly && !SAFE.contains(m.id())) continue;
+            // a Grower's provisions come from its own fields at home: as quiet as work gets, and a hurt
+            // Grower with nothing to eat beside a planted farm was going hungry (Bot1)
+            if (safeOnly && !SAFE.contains(m.id()) && !(m.id().equals("provisions") && farmsAtHome(b()))) continue;
             if (m.done().getAsBoolean()) continue;
             Long until = snoozed.get(m.id());
             if (until != null && until > now) continue;

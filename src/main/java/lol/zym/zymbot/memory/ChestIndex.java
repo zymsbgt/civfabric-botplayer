@@ -65,9 +65,11 @@ public final class ChestIndex {
         boolean fresh = r.at == null;
         r.at = new BotMemory.Pos(pos, bot.dim());
         r.items.clear();
+        r.free = 0;
         for (int i = 0; i < size && i < menu.slots.size(); i++) {
             ItemStack s = menu.getSlot(i).getItem();
             if (!s.isEmpty()) r.items.merge(Inv.id(s.getItem()), s.getCount(), Integer::sum);
+            else r.free++;
         }
         r.seenMillis = System.currentTimeMillis();
         String block = BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(pos).getBlock()).toString();
@@ -94,6 +96,13 @@ public final class ChestIndex {
         }
         r.ours = true;
         r.offLimits = false;
+    }
+
+    /** Opened, and no room left in it: the next stash makes another chest. */
+    public static void markFull(Bot bot, BlockPos pos) {
+        var r = bot.memory().chests.get(key(bot.dim(), pos));
+        if (r != null) r.free = 0;
+        bot.memory().save();
     }
 
     public static boolean takeable(BotMemory.ChestRecord r) {

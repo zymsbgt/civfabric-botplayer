@@ -31,15 +31,9 @@ public final class Placer {
             var st = WorldView.state(c);
             if (!st.canBeReplaced() || !st.getFluidState().isEmpty() || !Breaker.inReach(c)) continue;
             if (p.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(c))) continue;
-            boolean solidNeighbour = false;
-            for (Direction d : Direction.values()) {
-                var n = WorldView.state(c.relative(d));
-                if (!n.isAir() && !n.canBeReplaced() && n.getFluidState().isEmpty()) {
-                    solidNeighbour = true;
-                    break;
-                }
-            }
-            if (!solidNeighbour) continue;
+            // a face place() will actually click: not just any solid block, which at a base is often a
+            // chest or a bed, and that spot came back every time for 20 s ("couldn't place a crafting table")
+            if (!clickableFace(p, c)) continue;
             double score = c.distSqr(feet) + (WorldView.floor(c.below()) ? 0 : 6);
             if (score < bestScore) {
                 bestScore = score;
@@ -47,6 +41,23 @@ public final class Placer {
             }
         }
         return best;
+    }
+
+    /** Can {@link #place} put a block at {@code target} from where we stand. */
+    public static boolean placeable(BlockPos target) {
+        return clickableFace(Minecraft.getInstance().player, target);
+    }
+
+    /** A neighbour of {@code target} that {@link #place} would click: solid, nothing that opens, in reach. */
+    private static boolean clickableFace(LocalPlayer p, BlockPos target) {
+        for (Direction d : Direction.values()) {
+            BlockPos against = target.relative(d);
+            BlockState s = WorldView.state(against);
+            if (s.isAir() || s.canBeReplaced() || !s.getFluidState().isEmpty() || interactive(s)) continue;
+            Vec3 hit = Vec3.atCenterOf(against).add(Vec3.atLowerCornerOf(d.getOpposite().getNormal()).scale(0.5));
+            if (p.getEyePosition().distanceTo(hit) <= Breaker.reach()) return true;
+        }
+        return false;
     }
 
     /** Place {@code item} so it ends up at {@code target}, clicking a solid neighbour. */

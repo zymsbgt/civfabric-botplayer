@@ -222,7 +222,7 @@ public final class Brain {
         }
 
         if (bot.role().autonomous() && !fragile && BotConfig.get().takeBoardJobs && progression.basicsDone()
-                && !claimPending && bot.ticks() >= nextBoardCheck) {
+                && !claimPending && bot.ticks() >= nextBoardCheck && Inv.freeSlots() > 0) {
             nextBoardCheck = bot.ticks() + 200;
             tryClaim(bot);
         }

@@ -82,6 +82,15 @@ public final class Inv {
         return n;
     }
 
+    /** Somewhere in the pack for {@code s}: an empty slot, or a stack of the same thing with room. */
+    public static boolean roomFor(ItemStack s) {
+        for (int i = 0; i < 36; i++) {
+            ItemStack in = inv().getItem(i);
+            if (in.isEmpty() || ItemStack.isSameItemSameComponents(in, s) && in.getCount() + s.getCount() <= in.getMaxStackSize()) return true;
+        }
+        return false;
+    }
+
     /** Menu slot index that shows the given player-inventory index, or -1. */
     public static int menuSlot(AbstractContainerMenu menu, int invIndex) {
         for (Slot s : menu.slots) {

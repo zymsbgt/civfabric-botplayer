@@ -150,6 +150,11 @@ public class CraftTask extends Task {
                 AbstractContainerMenu m = menu(bot);
                 ItemStack res = m.getSlot(0).getItem();
                 if (!res.isEmpty() && res.is(output)) {
+                    // a full pack leaves the result in the grid, which looks just like a refusal
+                    if (!Inv.roomFor(res)) {
+                        clearGrid(bot);
+                        return fail("pack full: no room for " + Inv.id(output));
+                    }
                     countBefore = Inv.count(output);
                     Inv.click(m, 0, 0, ClickType.QUICK_MOVE);
                     phase = Phase.VERIFY;

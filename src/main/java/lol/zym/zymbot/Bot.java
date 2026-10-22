@@ -793,67 +793,26 @@ public final class Bot {
         }
     }
 
-    private static final Set<String> JUNK = Set.of("minecraft:dirt", "minecraft:gravel", "minecraft:rotten_flesh",
-            "minecraft:andesite", "minecraft:diorite", "minecraft:granite", "minecraft:tuff", "minecraft:netherrack",
-            "minecraft:wheat_seeds", "minecraft:poisonous_potato", "minecraft:spider_eye", "minecraft:cobbled_deepslate");
-
     private long nextSpareDrop;
 
+    /**
+     * A full pack, every couple of seconds: junk goes first (Keep's order: scaffold past a stack, worse
+     * tools, rotten food). Only when stashing keeps failing (no chest, and none can be made or reached)
+     * does a pile we'd rather store go, the smallest, now and then: a pack full for good stops all work.
+     */
     private void dropJunk() {
-        var menu = player().inventoryMenu;
-        // keep one stack of scaffolding; toss the rest of the junk
-        boolean keptScaffold = false;
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = Inv.inv().getItem(i);
-            if (s.isEmpty()) continue;
-            String id = Inv.id(s.getItem());
-            if (BotConfig.get().keepItems.contains(id)) continue;
-            boolean junk = JUNK.contains(id) || s.is(Items.COBBLESTONE) && Inv.count(Items.COBBLESTONE) > 128;
-            if (!junk) continue;
-            if (!keptScaffold && (s.is(Items.DIRT) || s.is(Items.COBBLED_DEEPSLATE))) {
-                keptScaffold = true;
-                continue;
-            }
-            Inv.click(menu, Inv.menuSlot(menu, i), 1, ClickType.THROW);
-            return; // one stack per call
-        }
-        // no junk left: toss the most worn spare copy of a tool or weapon (we keep one of each).
-        // Rarely: what we throw often lands where we walk and gets picked straight back up.
-        if (tick < nextSpareDrop) return;
-        nextSpareDrop = tick + 600;
-        Map<net.minecraft.world.item.Item, Integer> copies = new HashMap<>();
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = Inv.inv().getItem(i);
-            if (s.isDamageableItem()) copies.merge(s.getItem(), 1, Integer::sum);
-        }
-        int worst = -1;
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = Inv.inv().getItem(i);
-            if (!s.isDamageableItem() || copies.get(s.getItem()) < 2 || i == Inv.inv().selected) continue;
-            if (worst < 0 || s.getDamageValue() > Inv.inv().getItem(worst).getDamageValue()) worst = i;
-        }
-        if (worst >= 0) {
-            event("inventory full: dropping a spare " + Inv.id(Inv.inv().getItem(worst).getItem()).replace("minecraft:", ""));
-            Inv.click(menu, Inv.menuSlot(menu, worst), 1, ClickType.THROW);
+        var piles = lol.zym.zymbot.inv.Keep.surplus(this);
+        for (var pile : piles) {
+            if (pile.fate() != lol.zym.zymbot.inv.Keep.Fate.JUNK) continue;
+            lol.zym.zymbot.brain.tasks.DropJunkTask.throwPile(this, pile);
             return;
         }
-        // no chest near home to stash in (a base just moved, say), and a chest takes a free slot to
-        // craft: the smallest pile of odds and ends goes, or the pack stays full for good
-        BlockPos home = memory.home == null ? null : memory.home.pos();
-        if (home == null || memory.chests.values().stream().anyMatch(r -> r.ours && r.at != null && r.at.pos().closerThan(home, 32))) return;
-        int least = -1;
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = Inv.inv().getItem(i);
-            if (s.isEmpty() || s.isDamageableItem() || Inv.isFood(s) || s.is(net.minecraft.tags.ItemTags.BEDS) || s.is(net.minecraft.tags.ItemTags.WOOL)
-                    || s.is(Items.CRAFTING_TABLE) || s.is(Items.FURNACE) || s.is(Items.CHEST) || s.is(Items.TORCH)
-                    || s.is(net.minecraft.tags.ItemTags.LOGS) || s.is(net.minecraft.tags.ItemTags.PLANKS) || s.is(Items.STICK)
-                    || s.getItem() instanceof net.minecraft.world.item.BlockItem bi && bi.getBlock() instanceof net.minecraft.world.level.block.CropBlock
-                    || BotConfig.get().keepItems.contains(Inv.id(s.getItem()))) continue;
-            if (least < 0 || s.getCount() < Inv.inv().getItem(least).getCount()) least = i;
-        }
-        if (least >= 0) {
-            event("inventory full, no chest at home: dropping " + Inv.inv().getItem(least).getCount() + " " + Inv.id(Inv.inv().getItem(least).getItem()).replace("minecraft:", ""));
-            Inv.click(menu, Inv.menuSlot(menu, least), 1, ClickType.THROW);
+        if (tick < nextSpareDrop || !brain.progression().stashStuck()) return;
+        nextSpareDrop = tick + 600;
+        for (var pile : piles) {
+            event("inventory full and nowhere to stash: dropping " + pile.count() + " " + Inv.id(pile.item()).replace("minecraft:", ""));
+            lol.zym.zymbot.brain.tasks.DropJunkTask.throwPile(this, pile);
+            return;
         }
     }
 
