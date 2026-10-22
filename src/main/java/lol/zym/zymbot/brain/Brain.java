@@ -805,9 +805,10 @@ public final class Brain {
                 && bot.dim().equals(bot.memory().bed.dim))
             return "sleep";
         // to heal, not to pass the night: CivFabric's night watch doesn't skip it, so a healthy bot
-        // in bed just loses the night's work
+        // in bed just loses the night's work. A warm bed heals only 5 a night, so any wound worth a
+        // night's work goes to bed with one (below 19); a cold bed heals nothing, so only the hurt
         if (cfg.sleep && WorldView.isNight() && bot.memory().bed != null && System.currentTimeMillis() > noSleepUntil
-                && bot.health().hurt(bot)
+                && (bot.memory().bedWarm ? p.getHealth() < 19 : bot.health().hurt(bot))
                 && bot.memory().bed.pos().closerThan(p.blockPosition(), 128) && bot.dim().equals(bot.memory().bed.dim))
             return "sleep";
         // something on the shopping list a few steps away: pick it up on the way. Only between our
