@@ -104,6 +104,8 @@ public final class ClassPlan {
             }
             String rival = taken.get(mem.classRole);
             if (rival == null || rival.compareToIgnoreCase(bot.name()) > 0 || committed(bot)) return;
+            // every role is held already: choosing again lands on this one, every few seconds
+            if (ROLES.stream().allMatch(r -> taken.containsKey(r.name()))) return;
             bot.event("teammate " + rival + " is also " + mem.classRole + "; choosing again");
             mem.classRole = null;
         }
