@@ -1139,7 +1139,7 @@ public final class Bot {
             h.addProperty("name", m.name());
             if (m.state().has("pos")) h.add("pos", m.state().get("pos"));
             h.addProperty("dim", m.dim());
-            h.addProperty("via", m.state().has("via_chat") ? "chat" : "hub");
+            h.addProperty("via", m.state().has("via_chat") ? "chat" : m.state().has("via_sight") ? "sight" : "hub");
             // and whether it's doing anything: a bot back from a restart sits paused until told to start
             h.addProperty("paused", m.state().has("enabled") && !m.state().get("enabled").getAsBoolean());
             h.addProperty("workless", m.state().has("workless") && m.state().get("workless").getAsBoolean());

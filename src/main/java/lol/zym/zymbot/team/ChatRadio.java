@@ -68,6 +68,11 @@ public final class ChatRadio {
     private final Set<String> said = new HashSet<>();
     private long sentAt, beaconAt, foodAt;
     private String lastBeacon = "", lastFood = "";
+    /** Every bot heard on the radio this session (lower case): one of ours when we see it again. */
+    private final Set<String> everHeard = new HashSet<>();
+    /** When we last said our status for a teammate that came into sight: name -> millis. */
+    private final Map<String, Long> greeted = new HashMap<>();
+    private long greetCheckAt;
     /** Each teammate's food and meals, from its last "fd" line. */
     private final Map<String, JsonObject> foods = new HashMap<>();
 
@@ -85,6 +90,16 @@ public final class ChatRadio {
         String stable = beacon.replaceFirst(" p=\\S+", "");
         // on time, or soon after something changed (a new class role, a base)
         long every = BotConfig.get().chatBeaconSeconds * 1000L;
+        // a bot of ours came into sight that we haven't heard: say our status (and forecasts) now,
+        // rather than up to a minute later, so it knows us as soon as we know it
+        if (now - greetCheckAt > 1000) {
+            greetCheckAt = now;
+            for (String name : unheardInSight(bot)) {
+                if (now - greeted.getOrDefault(key(name), 0L) < 3 * 60_000L) continue;
+                greeted.put(key(name), now);
+                if (now - beaconAt > 15_000) repeatForecasts();
+            }
+        }
         if (now - beaconAt > every || !stable.equals(lastBeacon) && now - beaconAt > 15_000) {
             beaconAt = now;
             lastBeacon = stable;
@@ -307,6 +322,7 @@ public final class ChatRadio {
         }
         if (!s.has("pos")) return;
         boolean isNew = !heard.containsKey(key(from));
+        everHeard.add(key(from));
         heard.put(key(from), new Heard(s, System.currentTimeMillis()));
         if (isNew) {
             bot.event("radio: " + from + " is in range (heard on chat)");
@@ -385,6 +401,31 @@ public final class ChatRadio {
             if (foods.containsKey(k)) foods.get(k).entrySet().forEach(e -> s.add(e.getKey(), e.getValue()));
             out.add(new TeamBus.Member(name, s));
         });
+        // a bot of ours in sight is in range now, before its next status line says so. Seeing isn't
+        // talking, so this keeps to chat-only: where it stands for now, the rest once it speaks
+        if (bot != null && bot.level() != null) {
+            for (String name : unheardInSight(bot)) {
+                var pl = bot.findPlayer(name);
+                JsonObject s = new JsonObject();
+                s.addProperty("name", name);
+                s.addProperty("via_sight", true);
+                s.addProperty("dim", bot.dim());
+                s.add("pos", xyz(pl.getBlockX() + "," + pl.getBlockY() + "," + pl.getBlockZ()));
+                s.addProperty("heard_ms", 0);
+                out.add(new TeamBus.Member(name, s));
+            }
+        }
+        return out;
+    }
+
+    /** Bots of ours in sight (heard on the radio before, or vouched for by the hub) not heard lately. */
+    private List<String> unheardInSight(Bot bot) {
+        List<String> out = new ArrayList<>();
+        for (var pl : bot.level().players()) {
+            String name = pl.getGameProfile().getName();
+            if (pl == bot.player() || heard.containsKey(key(name))) continue;
+            if (everHeard.contains(key(name)) || bot.team().hubKnows(name)) out.add(name);
+        }
         return out;
     }
 
