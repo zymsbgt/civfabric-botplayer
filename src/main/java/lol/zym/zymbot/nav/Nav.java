@@ -59,6 +59,11 @@ public final class Nav {
         for (var b : java.util.List.of(net.minecraft.world.level.block.Blocks.CAMPFIRE, net.minecraft.world.level.block.Blocks.SOUL_CAMPFIRE,
                 net.minecraft.world.level.block.Blocks.MAGMA_BLOCK))
             if (!s.blocksToAvoid.value.contains(b)) s.blocksToAvoid.value.add(b);
+        // TRMT's eroded sand: worn down it's 10/16 tall, too high to step onto, and Baritone takes a
+        // short block for one it can walk through, so bots walked into it and stuck (the user's call:
+        // keep off it for now). Avoided, it is a wall to go around, or to dig through like sand
+        BuiltInRegistries.BLOCK.getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("trmt", "eroded_sand"))
+                .filter(b -> !s.blocksToAvoid.value.contains(b)).ifPresent(s.blocksToAvoid.value::add);
         s.antiCheatCompatibility.value = true;
         s.renderPath.value = true;
         s.chatDebug.value = false;
