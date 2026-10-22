@@ -31,7 +31,16 @@ public class UnstuckTask extends Task {
     }
 
     public UnstuckTask(boolean escape) {
+        this(escape, false);
+    }
+
+    /** Stranded up high in the open: step off the edge with the shortest safe fall. */
+    private final boolean drop;
+    private net.minecraft.core.Direction dropDir;
+
+    public UnstuckTask(boolean escape, boolean drop) {
         this.escape = escape;
+        this.drop = drop;
     }
 
     @Override
@@ -47,6 +56,7 @@ public class UnstuckTask extends Task {
             startY = feet.getY();
             Nav.stop();
         }
+        if (drop) return stepOff(bot, feet);
         if (ticks > 20 * 90) return fail("couldn't climb out");
         boolean free = bot.level().canSeeSky(feet.above()) && p.onGround() && !p.isInWater();
         if (free || feet.getY() - startY > 24) return Status.SUCCESS;
@@ -100,6 +110,68 @@ public class UnstuckTask extends Task {
         return Status.RUNNING;
     }
 
+    /**
+     * Off a pillar or a platform: of the four ways off, the one whose fall hurts least (water breaks
+     * a fall; lava rules a way out), and only if it leaves us more than 6 health. Walk off and land.
+     */
+    private Status stepOff(Bot bot, BlockPos feet) {
+        var p = bot.player();
+        if (feet.getY() < startY && p.onGround()) {
+            Controls.forward(false);
+            bot.event("down from " + startY + " to " + feet.getY());
+            return Status.SUCCESS;
+        }
+        if (ticks > 20 * 15) {
+            Controls.forward(false);
+            return fail(dropDir == null ? "stranded, and every way down is too far" : "couldn't step off the edge");
+        }
+        if (dropDir == null) {
+            double best = Double.MAX_VALUE;
+            for (var d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                BlockPos c = feet.relative(d);
+                if (!passable(c) || !passable(c.above())) continue;
+                int fall = 0;
+                BlockPos land = null;
+                for (int k = 1; k <= 40; k++) {
+                    var st = WorldView.state(c.below(k));
+                    if (!WorldView.loaded(c.below(k))) break;
+                    if (st.getFluidState().is(FluidTags.LAVA)) break;
+                    if (!st.getFluidState().isEmpty()) {
+                        land = c.below(k);
+                        fall = 0; // water takes the fall
+                        break;
+                    }
+                    if (!passable(c.below(k))) {
+                        land = c.below(k);
+                        fall = k - 1;
+                        break;
+                    }
+                }
+                if (land == null) continue;
+                double hurt = Math.max(0, fall - 3);
+                if (hurt < best) {
+                    best = hurt;
+                    dropDir = d;
+                }
+            }
+            if (dropDir == null || p.getHealth() - best <= 6) {
+                dropDir = null;
+                return fail("stranded, and every way down is too far");
+            }
+            bot.event("stepping off to the " + dropDir.getName() + (best > 0 ? " (a fall costing " + (int) best + ")" : ""));
+        }
+        Nav.stop();
+        var target = net.minecraft.world.phys.Vec3.atBottomCenterOf(feet.relative(dropDir).relative(dropDir));
+        Controls.lookAt(target.add(0, p.getEyeHeight(), 0), 180f);
+        Controls.forward(true);
+        return Status.RUNNING;
+    }
+
+    private static boolean passable(BlockPos at) {
+        var st = WorldView.state(at);
+        return (st.isAir() || st.canBeReplaced()) && !st.getFluidState().is(FluidTags.LAVA);
+    }
+
     /** Only water between us and open air, within a few blocks: we can just swim up. */
     private static boolean openAbove(BlockPos feet) {
         for (int i = 1; i <= 8; i++) {
@@ -115,5 +187,6 @@ public class UnstuckTask extends Task {
         super.stop(bot);
         if (breaker != null) breaker.cancel();
         Controls.jump(false);
+        Controls.forward(false);
     }
 }

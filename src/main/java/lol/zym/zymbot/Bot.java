@@ -808,6 +808,20 @@ public final class Bot {
     private final Map<String, Long> askedAt = new HashMap<>();
     private BlockPos stillAt;
     private long stillSince;
+    /** When we last got anywhere (not reset by asking): three minutes of nothing in the open is stranded. */
+    private long stillFrom;
+
+    /**
+     * Going nowhere for three minutes in the open, on our feet, when we should be on the move: up a
+     * pillar or out on a bridge with no way down that Baritone will take (Bot5, a platform 90 up).
+     */
+    public boolean stranded() {
+        var p = player();
+        // still where we got stuck: once a step down has moved us, it's over (the 10 s check that
+        // resets the clock came late, and Bot5 stepped off ten more times down a hillside)
+        return stillAt != null && stillAt.closerThan(p.blockPosition(), 4) && System.currentTimeMillis() - stillFrom > 3 * 60_000L
+                && p.onGround() && !p.isInWater() && level().canSeeSky(p.blockPosition().above());
+    }
 
     /**
      * Something we aren't built to handle: say so on the radio. A teammate in earshot passes it on in
@@ -834,8 +848,9 @@ public final class Bot {
         boolean stays = !enabled || player().isSleeping() || task.startsWith("[idle]")
                 || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft").anyMatch(task::contains);
         if (stays || stillAt == null || !stillAt.closerThan(here, 4)) {
-            stillAt = here;
+            stillAt = stays ? null : here;
             stillSince = now;
+            stillFrom = now;
             return;
         }
         if (now - stillSince > 5 * 60_000L) {

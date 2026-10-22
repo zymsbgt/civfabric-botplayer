@@ -575,7 +575,7 @@ public final class Brain {
         // hungry with nothing to eat: go and get food before anything else (CivFabric won't
         // even let us craft below 4)
         if (!wet && food <= 6 && EatTask.choose(bot) < 0 && System.currentTimeMillis() > noForageUntil) return "forage";
-        if (bot.stuck() && System.currentTimeMillis() > noUnstuckUntil) return "unstuck";
+        if ((bot.stuck() || bot.stranded()) && System.currentTimeMillis() > noUnstuckUntil) return "unstuck";
         // tonight's forecast names a blood moon: home before dusk, not caught out on a grave trip or
         // an errand when it rises (ShelterTask only walks home from within 48 blocks)
         var bedHome = !wet && Forecast.braceTime(bot) ? BraceTask.home(bot) : null;
@@ -675,8 +675,10 @@ public final class Brain {
                 yield new ShoreTask();
             }
             case "unstuck" -> {
-                bot.event(bot.player().isInWater() ? "stuck in water; climbing out" : "stuck underground; climbing out");
-                yield new UnstuckTask(true);
+                boolean stranded = !bot.stuck() && bot.stranded();
+                bot.event(stranded ? "stranded up here: looking for a safe way down"
+                        : bot.player().isInWater() ? "stuck in water; climbing out" : "stuck underground; climbing out");
+                yield new UnstuckTask(true, stranded);
             }
             case "receive" -> new ReceiveTask();
             case "forage" -> {
