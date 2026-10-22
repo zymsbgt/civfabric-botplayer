@@ -29,10 +29,11 @@ import java.util.Set;
  *
  * <p>Lines for bots start with {@value #TAG}. Everyone nearby sees them, players too, so there are
  * few: a status line about once a minute ("st"), each forecast reading of our own once ("fc"), each
- * forecast trust decision once ("tr"). Commands to teammates are ordinary "zb Bot2 come" lines. A
- * status line heard makes its sender a teammate in range, with the fields the rest of the bot reads
- * from a hub member (role, classes, bases, fields, forecasts), until it goes quiet. Lines count from
- * the names in our teammates list and from bots the hub has shown us.
+ * forecast trust decision once ("tr"), and our food when it changes, a minute apart at most ("fd").
+ * Commands to teammates are ordinary "zb Bot2 come" lines. A status line heard makes its sender a
+ * teammate in range, with the fields the rest of the bot reads from a hub member (role, classes,
+ * bases, fields, forecasts, food), until it goes quiet. Lines count from the names in our teammates
+ * list and from bots the hub has shown us.
  *
  * <p>Vanilla kicks a player for more than about one chat line a second, and the bot also sends
  * commands (/bed, /pacifist...) through the same counter: lines go out one every two seconds.
@@ -59,8 +60,10 @@ public final class ChatRadio {
     private final Map<String, JsonObject> trusts = new HashMap<>();
     /** Ours already said: "reader night readMillis", and "player at" for trust. */
     private final Set<String> said = new HashSet<>();
-    private long sentAt, beaconAt;
-    private String lastBeacon = "";
+    private long sentAt, beaconAt, foodAt;
+    private String lastBeacon = "", lastFood = "";
+    /** Each teammate's food and meals, from its last "fd" line. */
+    private final Map<String, JsonObject> foods = new HashMap<>();
 
     public void say(String line) {
         if (outbox.contains(line)) return;
@@ -82,6 +85,17 @@ public final class ChatRadio {
             lastBeacon = stable;
             say(beacon);
             sayForecasts(bot);
+            lastFood = "";
+        }
+        // our food and meals for teammates' swaps: when they change, a minute apart at most (every
+        // meal and every pickup changes them), and again with each status line for newcomers
+        if (now - foodAt > 60_000) {
+            String food = foodLine(bot);
+            if (!food.equals(lastFood)) {
+                foodAt = now;
+                lastFood = food;
+                say(food);
+            }
         }
         if (!outbox.isEmpty() && now - sentAt > SPACING_MS) {
             sentAt = now;
@@ -111,6 +125,60 @@ public final class ChatRadio {
             b.append(" h=").append(String.join(";", hs));
         }
         return b.toString();
+    }
+
+    /**
+     * "~zb fd s=bread:12,cooked_beef:3 m=bread*2,carrot": the food we carry and our last meals,
+     * oldest first, a run of the same food as one entry. Small piles go first if it runs long.
+     */
+    private static String foodLine(Bot bot) {
+        List<Map.Entry<String, Integer>> stock = new ArrayList<>(lol.zym.zymbot.inv.Diet.foodCounts().entrySet());
+        stock.sort((x, y) -> y.getValue() - x.getValue());
+        List<String> meals = new ArrayList<>();
+        String run = null;
+        int n = 0;
+        for (String id : lol.zym.zymbot.inv.Diet.recentMeals(bot)) {
+            String s = lol.zym.zymbot.brain.FoodShare.shortId(id);
+            if (s.equals(run)) {
+                n++;
+                continue;
+            }
+            if (run != null) meals.add(n > 1 ? run + "*" + n : run);
+            run = s;
+            n = 1;
+        }
+        if (run != null) meals.add(n > 1 ? run + "*" + n : run);
+        while (true) {
+            List<String> st = new ArrayList<>();
+            for (var e : stock) st.add(lol.zym.zymbot.brain.FoodShare.shortId(e.getKey()) + ":" + e.getValue());
+            String line = TAG + " fd s=" + (st.isEmpty() ? "-" : String.join(",", st)) + " m=" + (meals.isEmpty() ? "-" : String.join(",", meals));
+            if (line.length() <= 250) return line;
+            if (meals.size() > 4) meals.remove(0);
+            else if (!stock.isEmpty()) stock.remove(stock.size() - 1);
+            else return line.substring(0, 250);
+        }
+    }
+
+    private static void food(JsonObject into, String fields) {
+        JsonObject stock = new JsonObject();
+        JsonArray meals = new JsonArray();
+        for (String f : fields.split(" ")) {
+            if (f.startsWith("s=") && !f.equals("s=-")) {
+                for (String p : f.substring(2).split(",")) {
+                    int c = p.lastIndexOf(':');
+                    if (c > 0) stock.addProperty(lol.zym.zymbot.brain.FoodShare.fullId(p.substring(0, c)), Integer.parseInt(p.substring(c + 1)));
+                }
+            } else if (f.startsWith("m=") && !f.equals("m=-")) {
+                for (String p : f.substring(2).split(",")) {
+                    int star = p.lastIndexOf('*');
+                    String id = lol.zym.zymbot.brain.FoodShare.fullId(star > 0 ? p.substring(0, star) : p);
+                    int times = star > 0 ? Integer.parseInt(p.substring(star + 1)) : 1;
+                    for (int i = 0; i < times; i++) meals.add(id);
+                }
+            }
+        }
+        into.add("food_stock", stock);
+        into.add("meals", meals);
     }
 
     /** Our own readings (and players' told to us) of nights not over yet, and trust we set: each once. */
@@ -159,6 +227,12 @@ public final class ChatRadio {
                     JsonObject r = JsonParser.parseString(w[2]).getAsJsonObject();
                     readings.computeIfAbsent(key(from), k -> new LinkedHashMap<>())
                             .put(r.get("reader").getAsString() + " " + r.get("night").getAsLong(), r);
+                    touch(from);
+                }
+                case "fd" -> {
+                    JsonObject f = new JsonObject();
+                    food(f, w[2]);
+                    foods.put(key(from), f);
                     touch(from);
                 }
                 case "tr" -> {
@@ -261,6 +335,7 @@ public final class ChatRadio {
             readings.getOrDefault(k, Map.of()).values().forEach(reads::add);
             s.add("forecast_readings", reads);
             if (trusts.containsKey(k)) s.add("forecast_trust", trusts.get(k));
+            if (foods.containsKey(k)) foods.get(k).entrySet().forEach(e -> s.add(e.getKey(), e.getValue()));
             out.add(new TeamBus.Member(name, s));
         });
         return out;

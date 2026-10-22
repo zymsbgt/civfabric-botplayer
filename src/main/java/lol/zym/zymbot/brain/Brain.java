@@ -415,6 +415,9 @@ public final class Brain {
 
     /** Milestones that failed several times running: past three, the bot asks Claude. */
     private final java.util.Map<String, Integer> failStreak = new java.util.HashMap<>();
+    /** The food swap we're making, and when to look for the next. */
+    private FoodShare.Gift gift;
+    private long noShareUntil;
 
     private static int priority(String kind) {
         if (kind == null) return -1;
@@ -648,6 +651,16 @@ public final class Brain {
                 if (detour != null) return "detour";
             }
         }
+        // a teammate close by would get more out of some of our food than we would (Spice of Fabric
+        // pays little for the tenth loaf, a lot for the first): walk over and hand it across. Between
+        // our own goals, by the same rules as a detour, and looked at every 10 s
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && bot.role().autonomous()
+                && System.currentTimeMillis() > noShareUntil && bot.ticks() % 200 == 100 && !bot.pacifism().bloodMoon()
+                && !bot.health().hurt(bot) && !wet && !bot.team().inRange().isEmpty()) {
+            noShareUntil = System.currentTimeMillis() + 10_000;
+            gift = FoodShare.best(bot);
+            if (gift != null) return "share";
+        }
         return null;
     }
 
@@ -733,6 +746,14 @@ public final class Brain {
                 noDetourUntil = System.currentTimeMillis() + 60_000; // until it ends, at the least
                 bot.event("on the way: " + detour.want().what() + " at " + detour.at().toShortString() + " (shopping list)");
                 yield new DetourTask(detour, bot.player().blockPosition());
+            }
+            case "share" -> {
+                FoodShare.gave(gift);
+                noShareUntil = System.currentTimeMillis() + 60_000;
+                bot.event(String.format("food swap: %d %s to %s (worth %.0f to them, %.0f to us)", gift.count(),
+                        FoodShare.shortId(gift.item()), gift.to(), gift.gain(), gift.loss()));
+                var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(gift.item()));
+                yield new GiveTask(gift.to(), ItemTarget.of(item, gift.count())).carriedOnly();
             }
             case "treat" -> {
                 noTreatUntil = System.currentTimeMillis() + 8_000;

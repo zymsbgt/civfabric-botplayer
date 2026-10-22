@@ -1020,6 +1020,8 @@ public final class Bot {
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
         o.addProperty("food_points", lol.zym.zymbot.brain.Progression.foodPoints());
+        // what we carry and ate lately, for teammates working out food swaps
+        lol.zym.zymbot.brain.FoodShare.publish(this, o);
         // ticks out of bed as the server counts them (phantoms past 168000)
         o.addProperty("awake_ticks", player().getStats().getValue(net.minecraft.stats.Stats.CUSTOM.get(net.minecraft.stats.Stats.TIME_SINCE_REST)));
         // teammates within earshot, on the hub or only on chat: a name the hub has never had reported

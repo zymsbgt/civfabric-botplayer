@@ -18,10 +18,17 @@ public class GiveTask extends Task {
     private final String player;
     private final ItemTarget what;
     private int given;
+    private boolean carriedOnly;
 
     public GiveTask(String player, ItemTarget what) {
         this.player = player;
         this.what = what;
+    }
+
+    /** Only what we carry now: when it runs out, that's what there was to give (a food swap). */
+    public GiveTask carriedOnly() {
+        carriedOnly = true;
+        return this;
     }
 
     public int given() {
@@ -42,6 +49,7 @@ public class GiveTask extends Task {
         }
         int remaining = what.count() - given;
         if (what.have() == 0) {
+            if (carriedOnly) return given > 0 ? Status.SUCCESS : fail("none left to give");
             setChild(bot, new ObtainTask(what.withCount(remaining)));
             return Status.RUNNING;
         }
