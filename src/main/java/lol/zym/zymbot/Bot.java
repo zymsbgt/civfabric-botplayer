@@ -609,6 +609,12 @@ public final class Bot {
         memory.save();
     }
 
+    /** Graves still to empty within 96 of a death away from home: 0 by our bed, where dying twice proves nothing. */
+    private int guardedGraves(BlockPos at) {
+        if (memory.bed != null && memory.bed.dim.equals(dim()) && memory.bed.pos().closerThan(at, 48)) return 0;
+        return (int) memory.graves.stream().filter(g -> g.dim.equals(dim()) && g.pos().closerThan(at, 96)).count();
+    }
+
     public void addGrave(BlockPos at) {
         memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().equals(at));
         memory.graves.add(new BotMemory.Pos(at, dim()));
@@ -712,6 +718,22 @@ public final class Bot {
         if (burns(lastHurtBy)) {
             memory.addHazard(new BotMemory.Pos(at, dim()));
             event("died to " + lastHurtBy + " at " + at.toShortString() + ": leaving that grave, and the place marked");
+        } else if ("trident".equals(lastHurtBy) || !level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,
+                player().getBoundingBox().inflate(24), lol.zym.zymbot.brain.FightOdds::tridentDrowned).isEmpty()) {
+            // a trident drowned keeps to its water, there or nearby, even by our bed (Bot5, killed by one
+            // in the river beside its farm, then hit again going back for the grave): leave the graves
+            memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().closerThan(at, 32));
+            pendingGrave = null;
+            memory.save();
+            event("killed with a trident drowned about, at " + at.toShortString() + ": leaving the graves there");
+        } else if (guardedGraves(at) > 0) {
+            // died again out by a grave we were going back for: what killed us is still there (Bot1 and
+            // a trident drowned on the coast, three lives running). Leave them all rather than a fourth
+            int n = guardedGraves(at);
+            memory.graves.removeIf(g -> g.dim.equals(dim()) && g.pos().closerThan(at, 96));
+            pendingGrave = null;
+            memory.save();
+            event("died near " + n + " grave(s) not yet emptied: leaving them and this one at " + at.toShortString());
         } else {
             addGrave(at);
         }

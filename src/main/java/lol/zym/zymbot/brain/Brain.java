@@ -383,6 +383,18 @@ public final class Brain {
         active = next;
     }
 
+    /** The day whose night a trident drowned has come for us in: dug in till dawn, as on a storm night. */
+    private long tridentNight = -1;
+
+    public boolean tridentNight(Bot bot) {
+        long t = bot.level().getDayTime();
+        long tod = t % 24000L;
+        return tridentNight == t / 24000L && tod >= 13000 && tod < 23000;
+    }
+
+    /** Milestones that failed several times running: past three, the bot asks Claude. */
+    private final java.util.Map<String, Integer> failStreak = new java.util.HashMap<>();
+
     private static int priority(String kind) {
         if (kind == null) return -1;
         return switch (kind) {
@@ -465,6 +477,16 @@ public final class Brain {
         if (t != null) {
             boolean weak = p.getHealth() <= bot.health().fleeAt(bot);
             boolean boom = t instanceof Creeper c && (c.getSwellDir() > 0 || Inv.bestWeapon() < 0);
+            // a trident drowned at night: a 12-point throw from 20 blocks off, and it outlasts a flee (four
+            // bots dead in ten minutes, one chased up a hill). Into the ground till dawn, as for a storm.
+            // Not when it's on us already, or we're in deep water: there, fight or get away as usual
+            long tod = bot.level().getDayTime() % 24000L;
+            boolean tridentAbout = tridentNight(bot) || FightOdds.tridentDrowned(t) && !FightOdds.canTake(bot, threats(bot));
+            if (tridentAbout && tod >= 13000 && tod < 23000 && !boom && t.distanceTo(p) > 3
+                    && !WorldView.deepWater(p.blockPosition()) && !p.isUnderWater()) {
+                tridentNight = bot.level().getDayTime() / 24000L;
+                return "shelter";
+            }
             // a Super Blood Moon's mobs outrun and outlast us: getting into the ground beats a fight
             // we'd lose or a race we can't win. Only one already on us gets fought off
             if (bot.pacifism().superBloodMoon() && !boom && t.distanceTo(p) > 3 && !WorldView.deepWater(p.blockPosition())
