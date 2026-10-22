@@ -5,10 +5,9 @@ import lol.zym.zymbot.brain.Task;
 import lol.zym.zymbot.nav.Nav;
 import net.minecraft.world.entity.player.Player;
 
-/** Stay near a player until told otherwise. Fails if they're out of sight for a minute. */
+/** Stay near a player until told otherwise. Out of sight, we go looking for them ({@link SeekTask}). */
 public class FollowTask extends Task {
     private final String player;
-    private int missing;
     private boolean following;
 
     public FollowTask(String player) {
@@ -25,10 +24,15 @@ public class FollowTask extends Task {
         Player target = bot.findPlayer(player);
         if (target == null) {
             following = false;
-            if (++missing > 20 * 60) return fail(player + " is out of sight");
+            if (child == null) setChild(bot, new SeekTask(player, 8));
+            Task c = child;
+            if (runChild(bot) == Status.FAILURE) return fail(c.failureReason());
             return Status.RUNNING;
         }
-        missing = 0;
+        if (child != null) {
+            child.stop(bot);
+            child = null;
+        }
         if (!following || !Nav.baritone().getFollowProcess().isActive()) {
             Nav.follow(target);
             following = true;

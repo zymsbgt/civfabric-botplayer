@@ -10,8 +10,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ClickType;
 
 /**
- * Hand items to a teammate: get them if we don't have enough, walk over, and toss them at
- * their feet one stack at a time.
+ * Hand items to a teammate: get them if we don't have enough, find them ({@link SeekTask}), walk
+ * over, and toss them at their feet one stack at a time.
  */
 public class GiveTask extends Task {
     private int askedAt = -1000;
@@ -44,7 +44,8 @@ public class GiveTask extends Task {
     protected Status onTick(Bot bot) {
         if (given >= what.count()) return Status.SUCCESS;
         if (child != null) {
-            if (runChild(bot) == Status.FAILURE) return fail("couldn't get " + what);
+            Task c = child;
+            if (runChild(bot) == Status.FAILURE) return fail(c instanceof SeekTask ? c.failureReason() : "couldn't get " + what);
             return Status.RUNNING;
         }
         int remaining = what.count() - given;
@@ -55,7 +56,8 @@ public class GiveTask extends Task {
         }
         Player target = bot.findPlayer(player);
         if (target == null) {
-            if (ticks > 20 * 120) return fail(player + " not around");
+            // out of sight: where they were last seen, asking the teammates we pass
+            setChild(bot, new SeekTask(player, 24));
             return Status.RUNNING;
         }
         // ask a teammate bot to stop and catch (re-asked every 10 s; players just get the toss)

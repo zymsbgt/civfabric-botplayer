@@ -203,6 +203,18 @@ public final class BotMemory {
     /** Containers we've looked inside: "dim x y z" -> what was there. */
     public Map<String, ChestRecord> chests = new LinkedHashMap<>();
 
+    /** Where a player was last seen, by us or by a teammate who told us. */
+    public static final class Sighting {
+        public Pos at;
+        /** Level game time when seen: the same clock on every client of the server. */
+        public long tick;
+        /** Who saw them (us, or the teammate who told us). */
+        public String by;
+    }
+
+    /** The last place we know each player was: name (lower case) -> sighting. */
+    public Map<String, Sighting> sightings = new LinkedHashMap<>();
+
     private transient Path file;
 
     public static BotMemory load(UUID player) {
@@ -273,6 +285,26 @@ public final class BotMemory {
 
     public int timesEatenRecently(String id) {
         return (int) recent_foods.stream().filter(id::equals).count();
+    }
+
+    /** Note a sighting, if it's newer than what we have. True if it was. */
+    public boolean saw(String player, BlockPos pos, String dim, long tick, String by) {
+        String k = player.toLowerCase(Locale.ROOT);
+        Sighting old = sightings.get(k);
+        if (old != null && old.tick >= tick) return false;
+        Sighting s = new Sighting();
+        s.at = new Pos(pos, dim);
+        s.tick = tick;
+        s.by = by;
+        sightings.remove(k);
+        sightings.put(k, s);
+        // the players seen longest ago go first
+        while (sightings.size() > 64) sightings.remove(sightings.keySet().iterator().next());
+        return true;
+    }
+
+    public Sighting sighting(String player) {
+        return sightings.get(player.toLowerCase(Locale.ROOT));
     }
 
     public void blacklist(BlockPos pos, long forMillis) {

@@ -30,7 +30,7 @@ public final class Commands {
 
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
-            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
+            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
             "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
@@ -47,7 +47,7 @@ public final class Commands {
             "status | inv | diet (what each food is worth now) | milestones | team | help",
             "start | pause | stop (clears job) | role worker|leader",
             "get <item> [n] | give <player> <item> [n] | hunt [animal] [n]",
-            "follow [player] | come [player] | goto x y z | goto x z | explore [dist]",
+            "follow [player] | come [player] | whereis <player> | goto x y z | goto x z | explore [dist]",
             "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | skipnight",
             "heal <player> (stitches/medkit/wound mush) | campfire (warm the bed) | pacifist (pacifism, regen and bed warmth)",
             "forecast [readings [night] | players [name]] (the pooled moon odds, our guess, readings, players' records)",
@@ -332,6 +332,26 @@ public final class Commands {
                     }
                     return sb.toString();
                 }
+                case "whereis" -> {
+                    // where a player was last seen. A teammate looking for one sends the game time of
+                    // what it knows already, and gets ours as a "seen" command if it's newer
+                    if (a.length < 2) return "whereis <player> [game tick of what you know]";
+                    var s = bot.memory().sighting(a[1]);
+                    long after = a.length > 2 ? Long.parseLong(a[2]) : Long.MIN_VALUE;
+                    if (s == null || s.tick <= after) return "haven't seen " + a[1] + (s == null ? "" : " since");
+                    if (a.length > 2 && bot.team().member(from).isPresent())
+                        bot.radio(from, "seen " + a[1] + " " + s.at.dim + " " + s.at.x + " " + s.at.y + " " + s.at.z + " " + s.tick);
+                    return a[1] + " was at " + s.at.pos().toShortString() + " in " + s.at.dim + ", "
+                            + (bot.level().getGameTime() - s.tick) / 1200 + " min ago"
+                            + (s.by == null || s.by.equalsIgnoreCase(bot.name()) ? "" : " (" + s.by + " saw them)");
+                }
+                case "seen" -> {
+                    // a teammate's answer to our "whereis"
+                    if (a.length < 7) return "seen <player> <dim> <x> <y> <z> <game tick>";
+                    boolean newer = bot.memory().saw(a[1], new BlockPos(Integer.parseInt(a[3]), Integer.parseInt(a[4]), Integer.parseInt(a[5])),
+                            a[2], Long.parseLong(a[6]), from);
+                    return newer ? "noted where " + a[1] + " was" : "already knew newer";
+                }
                 case "receive" -> {
                     int secs = a.length > 1 ? Math.max(1, Math.min(30, Integer.parseInt(a[1]))) : 8;
                     bot.receive(secs);
@@ -484,7 +504,8 @@ public final class Commands {
                 String who = a.length > 1 ? a[1] : from;
                 Player p = bot.findPlayer(who);
                 BlockPos at = p != null ? p.blockPosition() : bot.lastKnownPosition(who);
-                return at == null ? null : new GoToTask(at, 2);
+                // nowhere in sight or radio range: where they were last seen, asking teammates on the way
+                return at == null ? new SeekTask(who, 3) : new GoToTask(at, 2);
             }
             case "goto" -> {
                 if (a.length == 2) {

@@ -537,6 +537,20 @@ public final class Bot {
         return best;
     }
 
+    /** Note where every player in sight is, and where the teammates in radio range say they are. */
+    private void notePlayers() {
+        long now = level().getGameTime();
+        for (Player o : level().players()) {
+            if (o != player()) memory.saw(o.getGameProfile().getName(), o.blockPosition(), dim(), now, name());
+        }
+        for (TeamBus.Member m : team.inRange()) {
+            if (!m.state().has("pos")) continue;
+            // a status line heard on chat can be a couple of minutes old
+            long ago = m.state().has("heard_ms") ? m.state().get("heard_ms").getAsLong() / 50 : 0;
+            memory.saw(m.name(), BlockPos.containing(m.x(), m.y(), m.z()), m.dim(), now - ago, m.name());
+        }
+    }
+
     /** Where a teammate bot last said it was (only if within radio range). */
     public BlockPos lastKnownPosition(String name) {
         return team.member(name).map(m -> BlockPos.containing(m.x(), m.y(), m.z())).orElse(null);
@@ -639,6 +653,7 @@ public final class Bot {
         if (tick % 1200 == 0) memory.save();
         // right after joining the chunks may not be in yet, so keep looking until something shows up
         if (tick % 600 == 1 || surveyed.isEmpty() && tick % 40 == 0) survey();
+        if (tick % 20 == 5) notePlayers();
 
         if (handleDeath()) return;
         if (!enabled) {

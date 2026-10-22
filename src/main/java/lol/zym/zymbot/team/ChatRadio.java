@@ -330,6 +330,7 @@ public final class ChatRadio {
             if (bot != null && bot.level() != null) {
                 var pl = bot.findPlayer(name);
                 if (pl != null) s.add("pos", xyz(pl.getBlockX() + "," + pl.getBlockY() + "," + pl.getBlockZ()));
+                s.addProperty("heard_ms", pl != null ? 0 : now - h.at());
             }
             JsonArray reads = new JsonArray();
             readings.getOrDefault(k, Map.of()).values().forEach(reads::add);
