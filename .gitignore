@@ -18,3 +18,4 @@ hub/hub-data*.json
 .DS_Store
 hub/hub-token.txt
 hub/second-machine-zymbot.json
+hub/alerts-seen.json

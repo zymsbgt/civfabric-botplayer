@@ -27,6 +27,15 @@ const ONLINE_MS = 15_000;
 const CLAIM_TTL_MS = 20 * 60_000;
 const OFFLINE_RELEASE_MS = 2 * 60_000; // a claimer offline this long loses its share
 const INBOX_CAP = 200;
+const ALERT_CAP = 100;
+// a server the hub has no list of bots for yet: the bots already there are learnt quietly this long
+const LEARN_MS = 2 * 60_000;
+const STARTED = Date.now();
+// how long a bot sits paused, or with nothing to do, before Claude is told; a bot between two
+// milestones is briefly idle, one back from a restart (autoStart off) stays paused until told
+const IDLE_ALERT_MS = { paused: 30_000, idle: 2 * 60_000 };
+// not heard for this long: whatever it was doing, the next time it's paused is a new episode
+const IDLE_FORGET_MS = 2 * 60_000;
 const MOD = process.env.ZYMBOT_HUB_MOD || "";
 const LIBS = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "build", "libs");
 
@@ -37,7 +46,13 @@ if (!TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
 
 // ---- state ---------------------------------------------------------------------------
 
-/** server key -> { members: Map<name,{state,updated}>, inboxes: Map<name,[]>, boards: Map<id,board> } */
+/**
+ * server key -> { members: Map<name,{state,updated}>, inboxes: Map<name,[]>, boards: Map<id,board>,
+ *                 met: Set<lowercased name> (every bot a teammate has ever reported hearing),
+ *                 alerts: [{seq, at, kind, name, heard_by, pos, dim, via}], learning: bool,
+ *                 idle: Map<lowercased name, {kind, since, heard, alerted}> (paused or workless now),
+ *                 helped: Set<"from|at"> (help requests already raised) }
+ */
 const servers = new Map();
 // From the clock, not 0: bots poll "messages after N" and keep N across a hub restart, so numbers
 // that started over were all below it and nothing new reached them until the count caught up
@@ -46,7 +61,7 @@ let dirty = false;
 
 function server(key) {
   key = String(key || "default");
-  if (!servers.has(key)) servers.set(key, { members: new Map(), inboxes: new Map(), boards: new Map() });
+  if (!servers.has(key)) servers.set(key, { members: new Map(), inboxes: new Map(), boards: new Map(), met: new Set(), alerts: [], learning: true, idle: new Map(), helped: new Set() });
   return servers.get(key);
 }
 
@@ -56,6 +71,11 @@ function load() {
     for (const [key, s] of Object.entries(raw.servers || {})) {
       const sv = server(key);
       for (const b of s.boards || []) sv.boards.set(b.id, b);
+      if (s.met) {
+        for (const n of s.met) sv.met.add(n);
+        sv.learning = false;
+      }
+      sv.alerts = s.alerts || [];
     }
     console.log(`Loaded boards from ${DATA}`);
   } catch { /* first run */ }
@@ -65,7 +85,10 @@ function save() {
   if (!dirty) return;
   dirty = false;
   const out = { servers: {} };
-  for (const [key, s] of servers) out.servers[key] = { boards: [...s.boards.values()] };
+  for (const [key, s] of servers) {
+    out.servers[key] = { boards: [...s.boards.values()] };
+    if (!s.learning) Object.assign(out.servers[key], { met: [...s.met], alerts: s.alerts });
+  }
   fs.writeFileSync(DATA + ".tmp", JSON.stringify(out, null, 2));
   fs.renameSync(DATA + ".tmp", DATA);
 }
@@ -104,7 +127,7 @@ function inRangeOf(sv, me) {
 function summary(st, d) {
   return {
     name: st.name, role: st.role, distance: Math.round(d || 0), pos: st.pos, dim: st.dim,
-    health: st.health, food: st.food, downed: st.downed, enabled: st.enabled, task: st.task,
+    health: st.health, food: st.food, downed: st.downed, enabled: st.enabled, workless: st.workless, task: st.task,
     inventory: st.inventory, armor: st.armor, recent_events: (st.events || []).slice(-8),
     // class roles and the food phase, so teammates split roles and know when the farm is up
     class_role: st.class_role, classes: st.classes, class_xp: st.class_xp, class_slots: st.class_slots,
@@ -113,6 +136,101 @@ function summary(st, d) {
     // moon forecast readings, passed from bot to bot as they meet, and whose players' readings count
     forecast: st.forecast, forecast_readings: st.forecast_readings, forecast_trust: st.forecast_trust,
   };
+}
+
+// ---- newcomers and idle bots ----------------------------------------------------------
+//
+// A bot that joins the team should be put to work at once, not found at the next look round. Each
+// bot's state lists the teammates it can hear (within range, on the hub or only on chat); a name no
+// bot ever reported before is an alert, for Claude's watcher (GET /alerts), and so is a known bot
+// heard sitting paused or with nothing to do. Only what a teammate heard counts, not a bot's own
+// state: Claude learns of it the way the team does.
+
+const alertWaiters = new Set();
+
+function noteHeard(sv, st) {
+  // while learning, the bots on the hub are known too, heard by anyone or not
+  if (sv.learning && st.name && !sv.met.has(st.name.toLowerCase())) {
+    sv.met.add(st.name.toLowerCase());
+    console.log(`Knew of ${st.name} already (on the hub)`);
+  }
+  for (const h of st.team_heard || []) {
+    const key = String(h.name || "").toLowerCase();
+    if (!key || sv.met.has(key)) continue;
+    sv.met.add(key);
+    dirty = true;
+    if (sv.learning) {
+      console.log(`Knew of ${h.name} already (heard by ${st.name})`);
+      continue;
+    }
+    raise(sv, "new_bot", h, st);
+    console.log(`New bot ${h.name}, heard by ${st.name} ${h.via === "chat" ? "on chat" : "on the hub"}`);
+  }
+  // a known bot sitting paused (back from a restart) or with nothing to do: once per episode
+  const now = Date.now();
+  for (const h of st.team_heard || []) {
+    const key = String(h.name || "").toLowerCase();
+    if (!key) continue;
+    const kind = h.paused ? "paused" : h.workless ? "idle" : null;
+    let e = sv.idle.get(key);
+    if (!kind) {
+      sv.idle.delete(key);
+      continue;
+    }
+    if (!e || e.kind !== kind || now - e.heard > IDLE_FORGET_MS) {
+      e = { kind, since: now, heard: now, alerted: false };
+      sv.idle.set(key, e);
+    }
+    e.heard = now;
+    if (!e.alerted && !sv.learning && now - e.since >= IDLE_ALERT_MS[kind]) {
+      e.alerted = true;
+      raise(sv, kind, h, st);
+      console.log(`${h.name} ${kind === "paused" ? "is paused" : "has nothing to do"}, heard by ${st.name}`);
+    }
+  }
+  // a bot asking for Claude: something it isn't built for. Heard on chat by a teammate (or the
+  // asker's own, if it leads), relayed here in that teammate's state, raised once
+  for (const x of st.help_heard || []) {
+    const key = `${String(x.from).toLowerCase()}|${x.at}`;
+    if (!x.from || sv.helped.has(key)) continue;
+    sv.helped.add(key);
+    if (sv.helped.size > 500) sv.helped.delete(sv.helped.values().next().value);
+    const asker = member(sv, x.from);
+    raise(sv, "help", { name: x.from, pos: asker?.state.pos, dim: asker?.state.dim, via: x.from === st.name ? "self" : "chat" }, st, { text: x.text });
+    console.log(`${x.from} asks for help (heard by ${st.name}): ${x.text}`);
+  }
+  // the first few minutes on a server we had no list for: what's there now is the team, not news
+  if (sv.learning && Date.now() - STARTED > LEARN_MS) {
+    sv.learning = false;
+    dirty = true;
+    console.log(`Learnt ${sv.met.size} bots; newcomers from now on are alerts`);
+  }
+}
+
+function raise(sv, kind, h, st, extra = {}) {
+  sv.alerts.push({ seq: ++seq, at: Date.now(), kind, name: h.name, heard_by: st.name, pos: h.pos, dim: h.dim, via: h.via, ...extra });
+  while (sv.alerts.length > ALERT_CAP) sv.alerts.shift();
+  dirty = true;
+  for (const w of alertWaiters) if (w.sv === sv) w.wake();
+}
+
+/** Alerts after `after`, waiting up to `wait` seconds for one if there are none yet. */
+function alertsAfter(sv, after, wait) {
+  const now = () => sv.alerts.filter((a) => a.seq > after);
+  const ready = now();
+  if (ready.length || wait <= 0) return Promise.resolve(ready);
+  return new Promise((resolve) => {
+    const w = {
+      sv,
+      wake: () => {
+        clearTimeout(w.timer);
+        alertWaiters.delete(w);
+        resolve(now());
+      },
+    };
+    w.timer = setTimeout(w.wake, Math.min(wait, 300) * 1000);
+    alertWaiters.add(w);
+  });
 }
 
 // ---- boards --------------------------------------------------------------------------
@@ -410,6 +528,7 @@ const httpServer = http.createServer(async (req, res) => {
       const st = await readBody(req);
       if (!st.name || !st.pos) return reply(400, { ok: false, error: "state needs name and pos" });
       sv.members.set(st.name, { state: st, updated: Date.now() });
+      noteHeard(sv, st);
       return reply(200, { ok: true });
     }
     if (req.method === "GET" && url.pathname === "/inbox") {
@@ -452,6 +571,12 @@ const httpServer = http.createServer(async (req, res) => {
       const out = [];
       for (const m of sv.members.values()) if (m.state.role === "leader") out.push({ name: m.state.name, online: online(m), dim: m.state.dim, pos: m.state.pos, task: m.state.task });
       return reply(200, { ok: true, leaders: out });
+    }
+    if (req.method === "GET" && url.pathname === "/alerts") {
+      // newcomers to the team, for Claude's watcher: long-polls up to `wait` seconds
+      const after = Number(url.searchParams.get("after") || 0);
+      const alerts = await alertsAfter(sv, after, Number(url.searchParams.get("wait") || 0));
+      return reply(200, { ok: true, alerts, last: alerts.length ? alerts[alerts.length - 1].seq : Math.max(after, 0), learning: sv.learning });
     }
     if (req.method === "GET" && url.pathname === "/servers") return reply(200, { ok: true, servers: [...servers.keys()] });
     if (req.method === "POST" && url.pathname === "/board") return reply(200, boardOp(sv, await readBody(req)));

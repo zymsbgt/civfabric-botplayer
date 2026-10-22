@@ -31,7 +31,7 @@ public final class Commands {
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "goto", "home",
-            "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "tell",
+            "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
             "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
     /** Likely second words after a command word, for tab completion. */
@@ -158,6 +158,12 @@ public final class Commands {
                     bot.memory().role = r.name().toLowerCase(Locale.ROOT);
                     bot.brain().stopAll(bot);
                     return "role " + r.name().toLowerCase(Locale.ROOT);
+                }
+                case "ask" -> {
+                    // ask Claude (through a teammate in earshot, or the hub if we lead)
+                    if (a.length < 2) return "ask <what you need help with>";
+                    bot.askForHelp(text.trim().substring(4));
+                    return "asked";
                 }
                 case "say" -> {
                     if (a.length < 2) return "say <text>";

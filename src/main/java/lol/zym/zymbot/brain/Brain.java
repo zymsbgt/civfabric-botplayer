@@ -109,6 +109,11 @@ public final class Brain {
         Controls.releaseAll();
     }
 
+    /** Nothing to do: no reflex, job or milestone, and not resting up from a wound. Fit to be given work. */
+    public boolean workless() {
+        return (active == null || active == Layer.IDLE) && !(idle instanceof RestTask);
+    }
+
     public String describe() {
         Task t = switch (active == null ? Layer.IDLE : active) {
             case REFLEX -> reflex;
@@ -250,9 +255,12 @@ public final class Brain {
                 if (s != Task.Status.RUNNING) {
                     if (s == Task.Status.FAILURE) {
                         bot.event("couldn't finish " + milestone.id() + ": " + progress.failureReason());
+                        int streak = failStreak.merge(milestone.id(), 1, Integer::sum);
+                        if (streak >= 3) bot.askForHelp("can't finish " + milestone.id() + " (" + streak + " tries): " + progress.failureReason());
                         progression.snooze(milestone.id(), 10 * 60_000L);
                         if (progress instanceof ObtainTask o) askBoard(bot, o.target());
                     } else if (milestone.done().getAsBoolean()) {
+                        failStreak.remove(milestone.id());
                         bot.event("milestone " + milestone.id() + " done");
                     } else if (progress.ticks < 40) {
                         // ended at once and nothing changed: it would start again every tick

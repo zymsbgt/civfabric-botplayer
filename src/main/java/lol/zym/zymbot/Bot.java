@@ -673,6 +673,7 @@ public final class Bot {
 
         if (tick % 100 == 0 && p.containerMenu == p.inventoryMenu) equipArmor();
         if (tick % 100 == 50) indexTables();
+        if (tick % 200 == 0) checkStill();
         if (tick % 40 == 0 && inventoryFull() && p.containerMenu == p.inventoryMenu) dropJunk();
 
         trackStuck();
@@ -712,6 +713,11 @@ public final class Bot {
         while (memory.deaths.size() > 10) memory.deaths.remove(0);
         memory.count("deaths");
         event("died at " + at.toShortString());
+        long now = System.currentTimeMillis();
+        deathTimes.add(now);
+        deathTimes.removeIf(t -> now - t > 10 * 60_000L);
+        if (deathTimes.size() >= 2)
+            askForHelp("died " + deathTimes.size() + " times in 10 minutes, last to " + lastHurtBy + " at " + at.toShortString());
         brain.stopAll(this);
         Controls.releaseAll();
         // burned to death (knocked out by it and bled out counts): the lava or fire is still there, and
@@ -795,6 +801,48 @@ public final class Bot {
     }
 
     private long nextSpareDrop;
+
+    // ---- asking Claude -----------------------------------------------------------------
+
+    private final List<Long> deathTimes = new ArrayList<>();
+    private final Map<String, Long> askedAt = new HashMap<>();
+    private BlockPos stillAt;
+    private long stillSince;
+
+    /**
+     * Something we aren't built to handle: say so on the radio. A teammate in earshot passes it on in
+     * its state, the hub raises it, and Claude's watcher wakes; a leader's own request goes straight
+     * in, as Claude leads through it. The same thing (numbers aside) is asked once per 10 minutes.
+     */
+    public void askForHelp(String what) {
+        String text = what.length() > 200 ? what.substring(0, 200) : what;
+        String key = text.replaceAll("-?\\d+", "#");
+        long now = System.currentTimeMillis();
+        Long at = askedAt.get(key);
+        if (at != null && now - at < 10 * 60_000L) return;
+        askedAt.put(key, now);
+        event("asking for help: " + text);
+        team.radio().say(lol.zym.zymbot.team.ChatRadio.TAG + " hp " + text);
+        if (role() == Role.LEADER) team.radio().heardHelp(name(), text);
+    }
+
+    /** Five minutes on one spot when we should be getting somewhere: stranded, boxed in, or looping. */
+    private void checkStill() {
+        BlockPos here = player().blockPosition();
+        long now = System.currentTimeMillis();
+        String task = brain.describe();
+        boolean stays = !enabled || player().isSleeping() || task.startsWith("[idle]")
+                || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft").anyMatch(task::contains);
+        if (stays || stillAt == null || !stillAt.closerThan(here, 4)) {
+            stillAt = here;
+            stillSince = now;
+            return;
+        }
+        if (now - stillSince > 5 * 60_000L) {
+            askForHelp("haven't moved from " + here.toShortString() + " in 5 minutes: " + task);
+            stillSince = now;
+        }
+    }
 
     /**
      * Crafting tables we may use (ours, the team base's), remembered as we pass them, and the ones
@@ -914,6 +962,7 @@ public final class Bot {
         o.addProperty("downed", downedSince != null);
         o.addProperty("time_of_day", level().getDayTime() % 24000);
         o.addProperty("task", brain.describe());
+        o.addProperty("workless", enabled && brain.workless());
         o.addProperty("job_from", brain.jobSource());
         // the board post we're really working on; the hub drops any other claim of ours (e.g. after a restart)
         o.addProperty("claim", brain.job() instanceof lol.zym.zymbot.brain.tasks.BoardJobTask b ? b.postId() : "");
@@ -944,6 +993,22 @@ public final class Bot {
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
         o.addProperty("food_points", lol.zym.zymbot.brain.Progression.foodPoints());
+        // teammates within earshot, on the hub or only on chat: a name the hub has never had reported
+        // is a newcomer, and the hub raises it for Claude to put to work
+        JsonArray heardMates = new JsonArray();
+        for (TeamBus.Member m : team.inRange()) {
+            JsonObject h = new JsonObject();
+            h.addProperty("name", m.name());
+            if (m.state().has("pos")) h.add("pos", m.state().get("pos"));
+            h.addProperty("dim", m.dim());
+            h.addProperty("via", m.state().has("via_chat") ? "chat" : "hub");
+            // and whether it's doing anything: a bot back from a restart sits paused until told to start
+            h.addProperty("paused", m.state().has("enabled") && !m.state().get("enabled").getAsBoolean());
+            h.addProperty("workless", m.state().has("workless") && m.state().get("workless").getAsBoolean());
+            heardMates.add(h);
+        }
+        o.add("team_heard", heardMates);
+        o.add("help_heard", team.radio().helpHeard());
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));
         o.add("landmarks", lol.zym.zymbot.memory.Landmarks.summary(this, 40));
         JsonObject homes = new JsonObject();

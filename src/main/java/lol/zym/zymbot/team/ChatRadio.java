@@ -46,6 +46,12 @@ public final class ChatRadio {
 
     private record Heard(JsonObject state, long at) {}
 
+    /** A teammate (or we, as a leader) asked for Claude: passed on in our state for the hub to raise. */
+    private record Help(String from, String text, long at) {}
+
+    private static final long HELP_KEEP_MS = 15 * 60_000L;
+    private final ArrayDeque<Help> helps = new ArrayDeque<>();
+
     private final ArrayDeque<String> outbox = new ArrayDeque<>();
     private final Map<String, Heard> heard = new LinkedHashMap<>();
     /** Forecast readings and trust decisions each teammate has said, kept as their state's fields. */
@@ -94,6 +100,9 @@ public final class ChatRadio {
         b.append(" d=").append(bot.dim());
         b.append(" p=").append(p.getBlockX()).append(',').append(p.getBlockY()).append(',').append(p.getBlockZ());
         b.append(" fp=").append(lol.zym.zymbot.brain.Progression.farmPlots(bot));
+        // paused, or with nothing to do: teammates tell the hub, and Claude gets a bot back to work
+        if (!bot.enabled()) b.append(" en=0");
+        else if (bot.brain().workless()) b.append(" wl=1");
         List<String> classes = lol.zym.zymbot.brain.ClassPlan.classes(bot);
         if (!classes.isEmpty()) b.append(" cl=").append(String.join(",", classes));
         if (!mem.teamHomes.isEmpty()) {
@@ -142,6 +151,10 @@ public final class ChatRadio {
         try {
             switch (w[1]) {
                 case "st" -> status(bot, from, w[2]);
+                case "hp" -> {
+                    heardHelp(from, w[2]);
+                    bot.event(from + " is asking for help: " + w[2]);
+                }
                 case "fc" -> {
                     JsonObject r = JsonParser.parseString(w[2]).getAsJsonObject();
                     readings.computeIfAbsent(key(from), k -> new LinkedHashMap<>())
@@ -177,6 +190,8 @@ public final class ChatRadio {
                 case "d" -> s.addProperty("dim", v);
                 case "p" -> s.add("pos", xyz(v));
                 case "fp" -> s.addProperty("farm_plots", Integer.parseInt(v));
+                case "en" -> s.addProperty("enabled", !"0".equals(v));
+                case "wl" -> s.addProperty("workless", "1".equals(v));
                 case "cl" -> {
                     JsonArray a = new JsonArray();
                     for (String c : v.split(",")) a.add(c);
@@ -200,6 +215,27 @@ public final class ChatRadio {
             bot.event("radio: " + from + " is in range (heard on chat)");
             repeatForecasts();
         }
+    }
+
+    /** Keep a request for help to pass on (a teammate's heard on chat, or a leader's own). */
+    public void heardHelp(String from, String text) {
+        helps.addLast(new Help(from, text, System.currentTimeMillis()));
+        while (helps.size() > 20) helps.removeFirst();
+    }
+
+    /** Requests heard lately, for our state: the hub raises each once, for Claude. */
+    public JsonArray helpHeard() {
+        long now = System.currentTimeMillis();
+        helps.removeIf(h -> now - h.at() > HELP_KEEP_MS);
+        JsonArray out = new JsonArray();
+        for (Help h : helps) {
+            JsonObject o = new JsonObject();
+            o.addProperty("from", h.from());
+            o.addProperty("text", h.text());
+            o.addProperty("at", h.at());
+            out.add(o);
+        }
+        return out;
     }
 
     private void touch(String from) {
