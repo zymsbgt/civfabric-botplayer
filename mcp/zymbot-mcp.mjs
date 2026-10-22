@@ -22,11 +22,8 @@ const LEADERS = (process.env.ZYMBOT_LEADERS || "").split(",").map((s) => s.trim(
 let SERVER = process.env.ZYMBOT_SERVER || "";
 
 async function hub(method, path, query = {}, body) {
-  if (!SERVER && path !== "/servers") {
-    const s = await hub("GET", "/servers");
-    SERVER = (s.servers || [])[0] || "default";
-  }
-  const q = new URLSearchParams({ server: SERVER, ...query });
+  const server = SERVER || (path === "/servers" || query.server ? "" : await pickServer());
+  const q = new URLSearchParams({ server, ...query });
   const res = await fetch(`${HUB}${path}?${q}`, {
     method,
     headers: { "content-type": "application/json", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
@@ -35,6 +32,16 @@ async function hub(method, path, query = {}, body) {
   const json = await res.json().catch(() => ({ ok: false, error: `hub HTTP ${res.status}` }));
   if (res.status === 401) throw new Error("Hub rejected the token (set ZYMBOT_HUB_TOKEN).");
   return json;
+}
+
+/** The server with a leader online (the hub keeps old servers too), kept once found; else the first one. */
+async function pickServer() {
+  const servers = (await hub("GET", "/servers")).servers || [];
+  for (const s of servers) {
+    const l = await hub("GET", "/leaders", { server: s });
+    if ((l.leaders || []).some((m) => m.online)) return (SERVER = s);
+  }
+  return servers[0] || "default";
 }
 
 async function leaderView(name) {
