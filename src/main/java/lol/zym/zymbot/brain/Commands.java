@@ -132,7 +132,7 @@ public final class Commands {
                     }
                     BlockPos me = bot.player().blockPosition();
                     StringBuilder sb = new StringBuilder("map at " + c.toShortString() + " (# solid . air ~ water B bed C chest D door"
-                            + " L ladder S stairs/slab T trapdoor F fence/wall c crop f farmland @ us)");
+                            + " L ladder S stairs/slab T trapdoor F fence/wall c crop f farmland e eroded (TRMT) @ us)");
                     for (int dy = 3; dy >= -2; dy--) {
                         sb.append("\ny").append(c.getY() + dy).append(':');
                         for (int dz = -r; dz <= r; dz++) {
@@ -676,6 +676,7 @@ public final class Commands {
         if (s.is(net.minecraft.tags.BlockTags.TRAPDOORS)) return 'T';
         if (s.is(net.minecraft.tags.BlockTags.FENCES) || s.is(net.minecraft.tags.BlockTags.WALLS) || s.is(net.minecraft.tags.BlockTags.FENCE_GATES)) return 'F';
         if (b instanceof net.minecraft.world.level.block.FarmBlock) return 'f';
+        if (BuiltInRegistries.BLOCK.getKey(b).getNamespace().equals("trmt")) return 'e';
         if (b instanceof net.minecraft.world.level.block.CropBlock) return 'c';
         if (!s.getFluidState().isEmpty()) return '~';
         return s.blocksMotion() ? '#' : ',';
