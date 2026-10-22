@@ -146,7 +146,9 @@ public final class Pacifism {
 
     /** Pacifism keeps this mob off us, so leave it alone (and hitting it would cost us). */
     public boolean atPeaceWith(Entity e) {
-        return protecting() && e instanceof Monster && !alwaysHostile(e) && !grudged(e.getType())
+        // phantoms too: not Monsters in code, but undead the pacifist mod keeps off us like the rest
+        return protecting() && (e instanceof Monster || e instanceof net.minecraft.world.entity.monster.Phantom)
+                && !alwaysHostile(e) && !grudged(e.getType())
                 // CivFabric's stormy night: drowned hunt pacifists from 13000 to 23000 in a thunderstorm
                 && !(e instanceof Drowned && stormNight())
                 // a spawner's mobs aren't natural spawns, and pacifism only covers those

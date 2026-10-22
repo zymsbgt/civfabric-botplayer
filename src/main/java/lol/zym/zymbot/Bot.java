@@ -630,6 +630,10 @@ public final class Bot {
         tick++;
 
         if (tick % 40 == 0) publishState();
+        // the server's count of our ticks out of bed, for the phantom threshold: it only sends it when asked.
+        // Paused too: a paused bot is awake all the same
+        if (tick % 6000 == 20) p.connection.send(new net.minecraft.network.protocol.game.ServerboundClientCommandPacket(
+                net.minecraft.network.protocol.game.ServerboundClientCommandPacket.Action.REQUEST_STATS));
         if (tick % 10 == 0) handleRadio();
         team.radio().tick(this);
         if (tick % 1200 == 0) memory.save();
@@ -810,6 +814,14 @@ public final class Bot {
     private long stillSince;
     /** When we last got anywhere (not reset by asking): three minutes of nothing in the open is stranded. */
     private long stillFrom;
+
+    /**
+     * Out of bed long enough that phantoms spawn over us: ZymLabs raised vanilla's three days to seven
+     * (168000 of our own ticks awake, online). The server's statistic, asked for every five minutes.
+     */
+    public boolean summoningPhantoms() {
+        return player().getStats().getValue(net.minecraft.stats.Stats.CUSTOM.get(net.minecraft.stats.Stats.TIME_SINCE_REST)) >= 168000;
+    }
 
     /**
      * Going nowhere for three minutes in the open, on our feet, when we should be on the move: up a
@@ -1008,6 +1020,8 @@ public final class Bot {
         o.addProperty("phase", brain.progression().phase(this));
         o.addProperty("farm_plots", lol.zym.zymbot.brain.Progression.farmPlots(this));
         o.addProperty("food_points", lol.zym.zymbot.brain.Progression.foodPoints());
+        // ticks out of bed as the server counts them (phantoms past 168000)
+        o.addProperty("awake_ticks", player().getStats().getValue(net.minecraft.stats.Stats.CUSTOM.get(net.minecraft.stats.Stats.TIME_SINCE_REST)));
         // teammates within earshot, on the hub or only on chat: a name the hub has never had reported
         // is a newcomer, and the hub raises it for Claude to put to work
         JsonArray heardMates = new JsonArray();

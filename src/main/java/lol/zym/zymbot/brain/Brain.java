@@ -391,13 +391,26 @@ public final class Brain {
         active = next;
     }
 
-    /** The day whose night a trident drowned has come for us in: dug in till dawn, as on a storm night. */
-    private long tridentNight = -1;
+    /**
+     * The day whose night we're dug in for (a trident drowned came for us, or phantoms we mayn't
+     * fight), and why: till dawn, as on a storm night.
+     */
+    private long hideNight = -1;
+    private String hideWhy = "";
 
-    public boolean tridentNight(Bot bot) {
+    public boolean hideNight(Bot bot) {
         long t = bot.level().getDayTime();
         long tod = t % 24000L;
-        return tridentNight == t / 24000L && tod >= 13000 && tod < 23000;
+        return hideNight == t / 24000L && tod >= 13000 && tod < 23000;
+    }
+
+    public String hideWhy() {
+        return hideWhy;
+    }
+
+    private void hideTonight(Bot bot, String why) {
+        hideNight = bot.level().getDayTime() / 24000L;
+        hideWhy = why;
     }
 
     /** Milestones that failed several times running: past three, the bot asks Claude. */
@@ -407,7 +420,7 @@ public final class Brain {
         if (kind == null) return -1;
         return switch (kind) {
             case "air" -> 6;
-            case "flee" -> 5;
+            case "flee", "bed" -> 5;
             case "fight" -> 4;
             case "eat", "shore", "shelter" -> 3;
             case "unstuck", "grave", "receive", "forage" -> 2;
@@ -489,10 +502,22 @@ public final class Brain {
             // bots dead in ten minutes, one chased up a hill). Into the ground till dawn, as for a storm.
             // Not when it's on us already, or we're in deep water: there, fight or get away as usual
             long tod = bot.level().getDayTime() % 24000L;
-            boolean tridentAbout = tridentNight(bot) || FightOdds.tridentDrowned(t) && !FightOdds.canTake(bot, threats(bot));
-            if (tridentAbout && tod >= 13000 && tod < 23000 && !boom && t.distanceTo(p) > 3
-                    && !WorldView.deepWater(p.blockPosition()) && !p.isUnderWater()) {
-                tridentNight = bot.level().getDayTime() / 24000L;
+            boolean night = tod >= 13000 && tod < 23000;
+            boolean dry = !WorldView.deepWater(p.blockPosition()) && !p.isUnderWater();
+            // phantoms, while pacifism is on: never fought (out of it, as any mob). ZymLabs' Insomnia
+            // rule: a phantom hunts only the player it spawned over, and pacifism keeps it off them too.
+            // The one it's for (a week awake) goes to bed, the cure, even on a night it meant to work;
+            // anyone else carries on, as it isn't after them
+            if (t instanceof net.minecraft.world.entity.monster.Phantom && bot.pacifism().protecting()) {
+                var bed = bot.memory().bed;
+                if (bot.summoningPhantoms() && night && bed != null && bot.dim().equals(bed.dim) && bed.pos().closerThan(p.blockPosition(), 128))
+                    return "bed";
+                return null;
+            }
+            boolean tridentAbout = hideNight(bot) && hideWhy.startsWith("trident")
+                    || FightOdds.tridentDrowned(t) && !FightOdds.canTake(bot, threats(bot));
+            if (tridentAbout && night && !boom && t.distanceTo(p) > 3 && dry) {
+                hideTonight(bot, "trident drowned about");
                 return "shelter";
             }
             // a Super Blood Moon's mobs outrun and outlast us: getting into the ground beats a fight
@@ -596,6 +621,12 @@ public final class Brain {
                     && bot.memory().bed.pos().closerThan(p.blockPosition(), 48) && bedEnclosed(bot);
             return rest ? "sleep" : "shelter";
         }
+        // a week awake: phantoms spawn over us from now on (ZymLabs: 168000 ticks out of bed). One
+        // night's sleep resets it, before any come
+        if (cfg.sleep && WorldView.isNight() && bot.memory().bed != null && System.currentTimeMillis() > noSleepUntil
+                && bot.summoningPhantoms() && bot.memory().bed.pos().closerThan(p.blockPosition(), 128)
+                && bot.dim().equals(bot.memory().bed.dim))
+            return "sleep";
         // to heal, not to pass the night: CivFabric's night watch doesn't skip it, so a healthy bot
         // in bed just loses the night's work
         if (cfg.sleep && WorldView.isNight() && bot.memory().bed != null && System.currentTimeMillis() > noSleepUntil
@@ -679,6 +710,10 @@ public final class Brain {
                 bot.event(stranded ? "stranded up here: looking for a safe way down"
                         : bot.player().isInWater() ? "stuck in water; climbing out" : "stuck underground; climbing out");
                 yield new UnstuckTask(true, stranded);
+            }
+            case "bed" -> {
+                bot.event("phantoms, and we're the one they come for (a week without sleep): to bed");
+                yield new SleepTask(bot.memory().bed.pos());
             }
             case "receive" -> new ReceiveTask();
             case "forage" -> {

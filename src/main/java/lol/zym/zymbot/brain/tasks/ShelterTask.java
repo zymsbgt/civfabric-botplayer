@@ -43,7 +43,7 @@ public class ShelterTask extends Task {
     private int phaseTicks;
     private BlockPos digging;
     private boolean danger(Bot bot) {
-        return bot.pacifism().bloodMoon() || stormNight(bot) || bot.brain().tridentNight(bot);
+        return bot.pacifism().bloodMoon() || stormNight(bot) || bot.brain().hideNight(bot);
     }
 
     /**
@@ -57,7 +57,7 @@ public class ShelterTask extends Task {
     }
 
     private String why(Bot bot) {
-        return bot.pacifism().bloodMoon() ? "blood moon" : stormNight(bot) ? "storm night" : "trident drowned about";
+        return bot.pacifism().bloodMoon() ? "blood moon" : stormNight(bot) ? "storm night" : bot.brain().hideWhy();
     }
 
     @Override
@@ -94,7 +94,7 @@ public class ShelterTask extends Task {
                 BlockPos b = base(bot);
                 // not home past a trident drowned: home is the river it came out of
                 boolean walk = b != null && b.closerThan(p.blockPosition(), 48) && !bot.pacifism().superBloodMoon()
-                        && !(bot.brain().tridentNight(bot) && !bot.pacifism().bloodMoon() && !stormNight(bot))
+                        && !(bot.brain().hideNight(bot) && !bot.pacifism().bloodMoon() && !stormNight(bot))
                         && bot.ticks() - bot.lastHurtTick > 200;
                 if (!walk || b.closerThan(p.blockPosition(), 10) || phaseTicks > 20 * 60) {
                     Nav.stop();
