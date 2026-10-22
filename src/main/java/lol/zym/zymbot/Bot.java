@@ -722,6 +722,7 @@ public final class Bot {
         classSheet.tick(this);
         forecast.tick(this);
         lol.zym.zymbot.memory.ChestIndex.tick(this);
+        if (tick % 10 == 0) lol.zym.zymbot.memory.ChestIndex.watch(this);
         lol.zym.zymbot.memory.Landmarks.tick(this);
         if (tick % 100 == 50) lol.zym.zymbot.brain.ClassPlan.reconcile(this);
         health.tick(this);

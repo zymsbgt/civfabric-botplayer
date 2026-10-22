@@ -72,6 +72,7 @@ public final class ChestIndex {
             else r.free++;
         }
         r.seenMillis = System.currentTimeMillis();
+        r.touchedBy = null;
         String block = BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(pos).getBlock()).toString();
         r.lootr = block.startsWith("lootr:");
         r.ours = r.ours || mem.stations.stream().anyMatch(st -> st.ours && st.at.pos().equals(pos))
@@ -85,6 +86,53 @@ public final class ChestIndex {
             bot.event("indexed a " + block.replace("minecraft:", "") + " at " + pos.toShortString() + " (" + r.items.size()
                     + " kinds" + (r.ours ? ", ours" : r.lootr ? ", lootr" : r.offLimits ? ", not ours to take from" : "") + ")");
         }
+    }
+
+    /** Our chests a player (not one of us) has open right now: chest key -> who. */
+    private static final Map<String, String> openBy = new HashMap<>();
+
+    /**
+     * Watch our chests within sight for a player opening one: once they shut it, what we remember
+     * of it is out of date. The bot of us nearest the chest goes and looks in again, as an errand
+     * ahead of its own goals. Called every half second.
+     */
+    public static void watch(Bot bot) {
+        var p = bot.player();
+        BlockPos me = p.blockPosition();
+        for (BotMemory.ChestRecord r : bot.memory().chests.values()) {
+            if (r.at == null || !r.ours || !Objects.equals(r.at.dim, bot.dim()) || !r.at.pos().closerThan(me, 32)) continue;
+            BlockPos pos = r.at.pos();
+            if (!bot.level().isLoaded(pos)) continue;
+            String k = key(bot.dim(), pos);
+            boolean ourOwn = p.containerMenu != p.inventoryMenu && pos.equals(lastUsed);
+            boolean open = !ourOwn && isOpen(bot, pos);
+            String who = openBy.get(k);
+            if (open && who == null) {
+                var o = bot.level().players().stream().filter(x -> x != p && x.blockPosition().closerThan(pos, 6))
+                        .min(Comparator.comparingDouble(x -> x.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)))
+                        .orElse(null);
+                String name = o == null ? null : o.getGameProfile().getName();
+                // our bots keep their own records: it's a person's visit that leaves ours stale
+                if (name != null && bot.team().knownNames().stream().noneMatch(name::equalsIgnoreCase)) openBy.put(k, name);
+            } else if (!open && who != null) {
+                openBy.remove(k);
+                r.touchedBy = who;
+                // the bot of us nearest the chest looks; the rest just know it's stale
+                double mine = pos.distSqr(me);
+                boolean nearest = bot.team().inRange().stream().noneMatch(m -> m.dim().equals(bot.dim())
+                        && BlockPos.containing(m.x(), m.y(), m.z()).distSqr(pos) < mine);
+                bot.event(who + " used our chest at " + pos.toShortString() + (nearest ? ": going to look in again" : ""));
+                if (nearest) bot.brain().addErrand(new lol.zym.zymbot.brain.tasks.LookInTask(pos), "chest watch", 40, 10 * 60_000L);
+            }
+        }
+    }
+
+    /** A chest's lid is up (the server shows us that for anyone's) or a barrel stands open. */
+    private static boolean isOpen(Bot bot, BlockPos pos) {
+        if (bot.level().getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.LidBlockEntity lid && lid.getOpenNess(1f) > 0)
+            return true;
+        var st = bot.level().getBlockState(pos);
+        return st.hasProperty(net.minecraft.world.level.block.BarrelBlock.OPEN) && st.getValue(net.minecraft.world.level.block.BarrelBlock.OPEN);
     }
 
     /** One we placed ourselves (or a team depot). */
@@ -144,6 +192,7 @@ public final class ChestIndex {
             o.addProperty("ours", r.ours);
             if (r.lootr) o.addProperty("lootr", true);
             if (r.offLimits) o.addProperty("off_limits", true);
+            if (r.touchedBy != null) o.addProperty("touched_by", r.touchedBy);
             o.addProperty("seen_min_ago", (System.currentTimeMillis() - r.seenMillis) / 60_000);
             JsonObject items = new JsonObject();
             r.items.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).limit(16)

@@ -83,6 +83,8 @@ public final class BotMemory {
         public boolean offLimits;
         /** Empty slots when last seen open; -1 if never counted. 0: full, a stash goes elsewhere. */
         public int free = -1;
+        /** Someone else (a player, not one of us) has been into it since we last looked: who. */
+        public String touchedBy;
     }
 
     public static final class RosterEntry {
