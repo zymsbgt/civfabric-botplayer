@@ -143,6 +143,12 @@ public final class BotMemory {
     /** Highest rank the server has told us we lack, per class: "miner" -> 2 means rank < 2. */
     public Map<String, Integer> rankBelow = new HashMap<>();
     public Map<String, Long> stats = new LinkedHashMap<>();
+    /** What killed us, and how often: an entity type ("drowned") or a damage type ("fall"). */
+    public Map<String, Integer> deathCauses = new LinkedHashMap<>();
+    /** What knocked us out, and how often. */
+    public Map<String, Integer> downedCauses = new LinkedHashMap<>();
+    /** Players within {@link History#NEAR} blocks when we were knocked out: name -> times. Who'd make a good Medic. */
+    public Map<String, Integer> downedNear = new LinkedHashMap<>();
     /** What was last planted on each field plot ("dim x y z" of the soil block), for soil rotation. */
     public Map<String, Planting> plantings = new HashMap<>();
     /** Role set at runtime by a "role" command; wins over the config. */
@@ -220,6 +226,11 @@ public final class BotMemory {
     public Map<String, Pos> playerHomes = new LinkedHashMap<>();
 
     private transient Path file;
+
+    /** Where {@link History} keeps this bot's history: beside this file. */
+    public Path historyFile() {
+        return file == null ? null : file.resolveSibling(file.getFileName().toString().replace(".json", ".history.jsonl"));
+    }
 
     public static BotMemory load(UUID player) {
         Path f = dir().resolve(player + ".json");

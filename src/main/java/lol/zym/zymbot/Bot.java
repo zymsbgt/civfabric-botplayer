@@ -192,6 +192,8 @@ public final class Bot {
     public long lastHurtTick = -1000;
     /** What last hurt us ("lava", "onFire", "mob"...): a death takes its cause from it. */
     private String lastHurtBy;
+    /** What last hurt us, for the tallies: a mob's kind ("drowned"), else the damage ("fall"). */
+    private String lastHurtCause;
     /** Every mob that has hurt us lately (entity id, tick of its last hit), for {@link #huntedBy}. */
     private final Map<Integer, Long> attackers = new HashMap<>();
     private static final long HUNTED_TICKS = 20 * 60 * 5;
@@ -219,6 +221,9 @@ public final class Bot {
             lastAttackerId = src != null && src.getEntity() != null ? src.getEntity().getId() : -1;
             lastHurtTick = tick;
             lastHurtBy = src == null ? null : src.type().msgId();
+            // for the death and knock-out tallies: the mob's kind, else the kind of damage
+            lastHurtCause = src == null ? "unknown" : src.getEntity() != null
+                    ? net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(src.getEntity().getType()).getPath() : src.type().msgId();
             if (src != null && src.getEntity() instanceof net.minecraft.world.entity.Mob m) {
                 attackers.values().removeIf(at -> tick - at > HUNTED_TICKS);
                 attackers.put(m.getId(), tick);
@@ -334,6 +339,7 @@ public final class Bot {
         ZymBotMod.LOG.info("[{}] {}", mc.player != null ? name() : "zymbot", msg);
         events.addLast(String.format("%tT %s", System.currentTimeMillis(), msg));
         while (events.size() > 40) events.removeFirst();
+        if (mc.player != null && memory != null) lol.zym.zymbot.memory.History.event(this, msg);
     }
 
     public List<String> recentEvents() {
@@ -445,7 +451,15 @@ public final class Bot {
             downedSince = System.currentTimeMillis();
             gaveUp = false;
             event("knocked out");
+            noteDowned();
         } else if (text.contains("You're back on your feet") || text.contains("You bled out")) {
+            if (downedSince != null) {
+                JsonObject o = new JsonObject();
+                o.addProperty("revived", text.contains("back on your feet"));
+                o.addProperty("downed_s", (System.currentTimeMillis() - downedSince) / 1000);
+                o.add("near", lol.zym.zymbot.memory.History.around(this));
+                lol.zym.zymbot.memory.History.write(this, text.contains("back on your feet") ? "revived" : "bled_out", o);
+            }
             downedSince = null;
         } else if (text.contains("too hungry to rest") || text.contains("not enough night left")
                 || text.contains("woke up from a nightmare")) {
@@ -741,10 +755,42 @@ public final class Bot {
         recordDeath();
     }
 
+    /** Knocked out: what did it, and who was near enough to come and help (the tally for picking Medics). */
+    private void noteDowned() {
+        String cause = lastHurtCause == null ? "unknown" : lastHurtCause;
+        memory.downedCauses.merge(cause, 1, Integer::sum);
+        JsonArray near = lol.zym.zymbot.memory.History.around(this);
+        for (var e : near) {
+            var o = e.getAsJsonObject();
+            if (o.get("dist").getAsDouble() <= lol.zym.zymbot.memory.History.NEAR) memory.downedNear.merge(o.get("name").getAsString(), 1, Integer::sum);
+        }
+        JsonObject o = new JsonObject();
+        o.addProperty("cause", cause);
+        o.addProperty("by", lastHurtBy);
+        o.add("near", near);
+        o.addProperty("night", WorldView.isNight());
+        o.addProperty("blood_moon", pacifism.bloodMoon());
+        lol.zym.zymbot.memory.History.write(this, "downed", o);
+        memory.save();
+    }
+
     private void recordDeath() {
         if (wasDead) return;
         wasDead = true;
         BlockPos at = player().blockPosition();
+        String cause = lastHurtCause == null ? "unknown" : lastHurtCause;
+        memory.deathCauses.merge(cause, 1, Integer::sum);
+        JsonObject dead = new JsonObject();
+        dead.addProperty("cause", cause);
+        dead.addProperty("by", lastHurtBy);
+        dead.addProperty("was_downed", downedSince != null);
+        dead.add("near", lol.zym.zymbot.memory.History.around(this));
+        dead.addProperty("night", WorldView.isNight());
+        dead.addProperty("blood_moon", pacifism.bloodMoon());
+        JsonObject xp = new JsonObject();
+        memory.classXp.forEach((c, v) -> xp.addProperty(c, Math.round(v)));
+        dead.add("class_xp_before", xp);
+        lol.zym.zymbot.memory.History.write(this, "death", dead);
         memory.deaths.add(new BotMemory.Pos(at, dim()));
         while (memory.deaths.size() > 10) memory.deaths.remove(0);
         memory.count("deaths");
@@ -781,6 +827,7 @@ public final class Bot {
             addGrave(at);
         }
         lastHurtBy = null;
+        lastHurtCause = null;
         downedSince = null;
         bedCheckAt = tick + 200; // a death with no claim scatters us: find out if that's what happened
 
@@ -1107,6 +1154,10 @@ public final class Bot {
         o.add("team_heard", heardMates);
         o.add("help_heard", team.radio().helpHeard());
         o.add("help_recalled", team.radio().helpRecalled());
+        // what kills and fells us, and who's near when we go down: for choosing who levels Medic
+        o.add("death_causes", new com.google.gson.Gson().toJsonTree(memory.deathCauses));
+        o.add("downed_causes", new com.google.gson.Gson().toJsonTree(memory.downedCauses));
+        o.add("downed_near", new com.google.gson.Gson().toJsonTree(memory.downedNear));
         JsonArray errands = new JsonArray();
         brain.errands().forEach(errands::add);
         o.add("errands", errands);

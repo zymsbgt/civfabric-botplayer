@@ -30,7 +30,7 @@ public final class Commands {
 
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
-            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "goto", "home",
+            "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
             "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
@@ -156,6 +156,16 @@ public final class Commands {
                     bot.brain().clearJob();
                     int n = bot.brain().clearErrands(bot);
                     return "job cleared" + (n > 0 ? ", and " + n + " set aside" : "");
+                }
+                case "deaths" -> {
+                    // what kills and knocks us out, and who's been near when we went down (who'd make a good Medic)
+                    var m = bot.memory();
+                    java.util.function.Function<Map<String, Integer>, String> top = t -> t.isEmpty() ? "none" : t.entrySet().stream()
+                            .sorted((x, y) -> y.getValue() - x.getValue()).limit(8).map(e -> e.getKey() + " " + e.getValue())
+                            .collect(java.util.stream.Collectors.joining(", "));
+                    return "died to: " + top.apply(m.deathCauses) + "; knocked out by: " + top.apply(m.downedCauses)
+                            + "; near when knocked out (within " + (int) lol.zym.zymbot.memory.History.NEAR + "): " + top.apply(m.downedNear)
+                            + "; history in " + m.historyFile().getFileName();
                 }
                 case "errands" -> {
                     // jobs set aside until a player turns up (or a more urgent errand is done)
