@@ -127,8 +127,9 @@ public class SmeltTask extends Task {
                 }
                 int fuelNeeded = (count - made()) * 200 - fuelTicks(m.getSlot(1).getItem());
                 if (fuelNeeded > 0 && m.getSlot(1).getItem().getCount() < 64) {
-                    // real fuel only: furnaces happily burn wooden tools, wool and crafting tables too
+                    // fuel first, then wood we can spare: a second crafting table, a worse wooden tool
                     int src = Inv.find(s -> isPlainFuel(s) && !input.test(s));
+                    if (src < 0) src = spareWood(bot);
                     if (src >= 0) {
                         ItemStack f = Inv.inv().getItem(src);
                         int per = AbstractFurnaceBlockEntity.getFuel().getOrDefault(f.getItem(), 200);
@@ -180,13 +181,27 @@ public class SmeltTask extends Task {
         return Status.RUNNING;
     }
 
-    /** Fuel worth burning: coal, wood, sticks, saplings. Never a tool, wool or a workstation. */
+    /** Fuel worth burning: coal, wood, sticks, saplings, wooden slabs and stairs. Never wool, nor a tool or table we'd miss. */
     public static boolean isPlainFuel(ItemStack s) {
         if (s.isEmpty() || s.isDamageableItem() || !AbstractFurnaceBlockEntity.isFuel(s)) return false;
         return s.is(Items.COAL) || s.is(Items.CHARCOAL) || s.is(Items.COAL_BLOCK) || s.is(Items.STICK)
                 || s.is(net.minecraft.tags.ItemTags.LOGS) || s.is(net.minecraft.tags.ItemTags.PLANKS)
+                || s.is(net.minecraft.tags.ItemTags.WOODEN_SLABS) || s.is(net.minecraft.tags.ItemTags.WOODEN_STAIRS)
                 || s.is(net.minecraft.tags.ItemTags.SAPLINGS) || s.is(Items.BAMBOO) || s.is(Items.DRIED_KELP_BLOCK)
                 || s.is(Items.BLAZE_ROD);
+    }
+
+    /**
+     * A slot of wood we can spare to burn, or -1: a crafting table past the one we keep, a wooden tool
+     * that isn't our best of its kind. Keep decides what's spare, as it does for the stash.
+     */
+    public static int spareWood(Bot bot) {
+        for (var pile : lol.zym.zymbot.inv.Keep.surplus(bot)) {
+            ItemStack s = Inv.inv().getItem(pile.slot());
+            boolean woodenTool = s.getItem() instanceof net.minecraft.world.item.TieredItem t && t.getTier() == net.minecraft.world.item.Tiers.WOOD;
+            if (s.is(Items.CRAFTING_TABLE) || woodenTool) return pile.slot();
+        }
+        return -1;
     }
 
     private static int fuelTicks(ItemStack s) {

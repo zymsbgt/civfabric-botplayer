@@ -184,11 +184,19 @@ public class ObtainTask extends Task {
                 fuelTicks += AbstractFurnaceBlockEntity.getFuel().getOrDefault(s.getItem(), 0) * s.getCount();
             }
         }
+        // and a spare table or worse wooden tool: it burns, and that's one less thing to fetch
+        int spare = SmeltTask.spareWood(bot);
+        if (spare >= 0) fuelTicks += AbstractFurnaceBlockEntity.getFuel().getOrDefault(Inv.inv().getItem(spare).getItem(), 0);
         if (fuelTicks >= n * 200) return null;
-        // charcoal/coal preferred; planks are the fallback everyone has
-        return Inv.count(Items.COAL) > 0 || bot.planner().cost(Items.COAL) < 20
-                ? ItemTarget.of(Items.COAL, Inv.count(Items.COAL) + (n + 7) / 8)
-                : new ItemTarget("planks", s -> s.is(net.minecraft.tags.ItemTags.PLANKS),
+        // coal or charcoal: one smelts 8, a plank 1.5. With no coal ore about, charcoal is a log
+        // smelted (the planner finds that way). Planks for small jobs, and always for making the
+        // charcoal itself, which would otherwise want charcoal to make
+        int coal = Inv.count(Items.COAL) + Inv.count(Items.CHARCOAL);
+        boolean makingCharcoal = in.test(new net.minecraft.world.item.ItemStack(Items.OAK_LOG));
+        if (!makingCharcoal && (coal > 0 || n >= 6))
+            return new ItemTarget("coal", s -> s.is(Items.COAL) || s.is(Items.CHARCOAL), java.util.List.of(Items.CHARCOAL, Items.COAL),
+                    coal + (n + 7) / 8);
+        return new ItemTarget("planks", s -> s.is(net.minecraft.tags.ItemTags.PLANKS),
                 java.util.List.of(Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS),
                 Inv.count(s -> s.is(net.minecraft.tags.ItemTags.PLANKS)) + (n * 2 + 2) / 3);
     }

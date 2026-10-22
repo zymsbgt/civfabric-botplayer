@@ -46,6 +46,12 @@ public class GatherTask extends Task {
     /** Switched to targeted for the rest of this gather (a build is near). */
     private boolean careful;
     private int lastCount, lastGainTick;
+    /** What the target was while it stood: a log on dirt was a tree's foot, to replant. */
+    private BlockState targetWas;
+    /** Trees we cut down, foot of the trunk -> its wood ("oak"): a sapling goes back in each. */
+    private final java.util.LinkedHashMap<BlockPos, String> stumps = new java.util.LinkedHashMap<>();
+    /** Stumps whose fallen saplings we've already gone round to pick up. */
+    private final Set<BlockPos> gleaned = new java.util.HashSet<>();
     private int idleMining;
 
     public GatherTask(List<Block> blocks, Predicate<ItemStack> match, int until) {
@@ -66,12 +72,12 @@ public class GatherTask extends Task {
 
     @Override
     protected Status onTick(Bot bot) {
-        if (Inv.count(match) >= until) return Status.SUCCESS;
         if (child != null) {
             Status s = runChild(bot);
             if (s != Status.RUNNING) search = null;
             return Status.RUNNING;
         }
+        if (Inv.count(match) >= until) return replant(bot) ? Status.RUNNING : Status.SUCCESS;
         if (mining || bulk(bot)) return mineMode(bot);
         return targetedMode(bot);
     }
@@ -91,10 +97,17 @@ public class GatherTask extends Task {
         if (!blocks.contains(WorldView.state(target).getBlock())) {
             // gone: broken by Baritone (or someone else) — collect what dropped
             Nav.stop();
+            if (targetWas != null && targetWas.is(net.minecraft.tags.BlockTags.LOGS) && WorldView.state(target.below()).is(net.minecraft.tags.BlockTags.DIRT)) {
+                String wood = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(targetWas.getBlock()).getPath()
+                        .replace("stripped_", "").replace("_log", "").replace("_wood", "");
+                stumps.put(target.immutable(), wood);
+            }
+            targetWas = null;
             bot.memory().count("blocks_mined");
             pickupWait = 6;
             return Status.RUNNING;
         }
+        targetWas = WorldView.state(target);
         var builder = Nav.baritone().getBuilderProcess();
         targetTicks++;
         if (!builder.isActive()) {
@@ -114,6 +127,35 @@ public class GatherTask extends Task {
             target = null;
         }
         return Status.RUNNING;
+    }
+
+    /**
+     * Done gathering: a sapling back where each tree stood (ones we're near, while we have saplings).
+     * The leaves come down a little after the trunk (LeafFall on the server), so first go round and
+     * pick up what fell. True while there's replanting to do.
+     */
+    private boolean replant(Bot bot) {
+        var it = stumps.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            BlockPos stump = e.getKey();
+            if (!ReplantTask.plantable(stump) || !stump.closerThan(bot.player().blockPosition(), 32)) {
+                it.remove();
+                continue;
+            }
+            if (gleaned.add(stump)) {
+                setChild(bot, new PickupTask(stump, 8));
+                return true;
+            }
+            if (Inv.count(st -> st.is(net.minecraft.tags.ItemTags.SAPLINGS)) == 0) {
+                stumps.clear();
+                return false;
+            }
+            it.remove();
+            setChild(bot, new ReplantTask(stump, e.getValue()));
+            return true;
+        }
+        return false;
     }
 
     /**
