@@ -23,6 +23,16 @@ public class UnstuckTask extends Task {
     private BlockPos stand;
     private Breaker breaker;
     private int badBreaks;
+    /** Stuck, not short of air: head above water isn't out yet (Bot3, a water-filled pit, ten minutes of this). */
+    private final boolean escape;
+
+    public UnstuckTask() {
+        this(false);
+    }
+
+    public UnstuckTask(boolean escape) {
+        this.escape = escape;
+    }
 
     @Override
     public String name() {
@@ -50,13 +60,14 @@ public class UnstuckTask extends Task {
             return Status.RUNNING;
         }
         boolean wet = p.isInWater();
-        if (wet && openAbove(feet)) {
+        if (wet && openAbove(feet) && (p.isUnderWater() || !escape)) {
             // open water: swimming up is enough, and drops no blocks in someone's lake;
             // once our head is out, the shore reflex takes us to dry land
             if (!p.isUnderWater()) return Status.SUCCESS;
             Controls.jump(true);
             return Status.RUNNING;
         }
+        // head out, but stuck in this water all the same: build up out of it, below
         // clear head room first, from solid footing (mining while swimming is 25x slower);
         // in water, standing on a block we placed counts. Gravel may keep falling in; we just break it again
         boolean footing = p.onGround() || wet && !WorldView.state(feet.below()).canBeReplaced();

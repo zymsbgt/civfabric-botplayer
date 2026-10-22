@@ -4,6 +4,7 @@ import lol.zym.zymbot.Bot;
 import lol.zym.zymbot.BotConfig;
 import lol.zym.zymbot.brain.Task;
 import lol.zym.zymbot.inv.Inv;
+import lol.zym.zymbot.nav.Nav;
 import lol.zym.zymbot.world.WorldView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
@@ -110,7 +111,7 @@ public class HuntTask extends Task {
                             e -> (types.contains(e.getType()) || mayHunt(bot, e) && (pokemon && lol.zym.zymbot.inv.PokemonFood.edible(e)
                                     || pokemonFor != null && lol.zym.zymbot.inv.PokemonFood.drops(e, pokemonFor)))
                                     && e.isAlive() && !skipped.contains(e.getId())
-                                    && !WorldView.deepWater(e.blockPosition()))
+                                    && !WorldView.deepWater(e.blockPosition()) && !airborne(e))
                     .stream().filter(e -> {
                         // a hostile that pacifism keeps off us: killing one turns its whole kin
                         // on us. And no hostiles at all while we can't afford to be hit.
@@ -148,12 +149,31 @@ public class HuntTask extends Task {
             prey = null;
             return Status.RUNNING;
         }
+        // took to the air: chasing a flier is how a bot pillars 70 blocks into the sky after a Cutiefly
+        // with no way back down (Bot4), or bridges out over nothing on its last cobblestone (Bot2)
+        if (airborne(prey)) {
+            skipped.add(prey.getId());
+            prey = null;
+            Nav.stop();
+            return Status.RUNNING;
+        }
         FightTask.engage(bot, prey);
         if (ticks % 400 == 0 && prey.distanceTo(bot.player()) > 24) {
             skipped.add(prey.getId()); // keeps running off; pick another
             prey = null;
         }
         return Status.RUNNING;
+    }
+
+    /** Flying: more than three blocks of air under it. */
+    private static boolean airborne(LivingEntity e) {
+        if (e.isInWater()) return false;
+        BlockPos p = e.blockPosition();
+        for (int i = 1; i <= 4; i++) {
+            if (!WorldView.loaded(p.below(i))) return false;
+            if (!WorldView.state(p.below(i)).getCollisionShape(e.level(), p.below(i)).isEmpty()) return false;
+        }
+        return true;
     }
 
     @Override

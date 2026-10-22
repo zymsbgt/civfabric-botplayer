@@ -74,6 +74,9 @@ public final class Nav {
 
         List<Item> throwaway = new ArrayList<>(List.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE,
                 Items.NETHERRACK, Items.ANDESITE, Items.DIORITE, Items.GRANITE, Items.TUFF));
+        // planks too: a bot that bridged out on its last cobblestone stood on it in mid-air for ten
+        // minutes with a stack of wood on it (Bot2), Baritone finding no way down. They're cheap from logs
+        for (Item i : BuiltInRegistries.ITEM) if (new net.minecraft.world.item.ItemStack(i).is(net.minecraft.tags.ItemTags.PLANKS)) throwaway.add(i);
         s.acceptableThrowawayItems.value = throwaway;
         configured = true;
         ZymBotMod.LOG.info("Baritone configured: {} block types protected from pathing breaks", forbidden.size());

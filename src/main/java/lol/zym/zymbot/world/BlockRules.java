@@ -80,7 +80,19 @@ public final class BlockRules {
                 || b instanceof SeagrassBlock || b instanceof VineBlock
                 || s.is(BlockTags.TERRACOTTA)
                 || b == Blocks.MOSS_BLOCK || b == Blocks.CALCITE || b == Blocks.TUFF || b == Blocks.DRIPSTONE_BLOCK
-                || b == Blocks.NETHERRACK || b == Blocks.SOUL_SAND || b == Blocks.SOUL_SOIL || b == Blocks.GLOWSTONE;
+                || b == Blocks.NETHERRACK || b == Blocks.SOUL_SAND || b == Blocks.SOUL_SOIL || b == Blocks.GLOWSTONE
+                || eroded(b);
+    }
+
+    /**
+     * TRMT, the erosion mod, wears paths into sand, dirt and grass: eroded blocks 10/16 tall and
+     * waterloggable. Baritone can neither stand on a block that short nor walk through it, and with
+     * it off the natural list it couldn't break it either: a wall (Bot4 boxed in on a riverbank).
+     * They're the ground, so dig through them like the sand under them.
+     */
+    private static boolean eroded(Block b) {
+        var key = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b);
+        return key.getNamespace().equals("trmt") && key.getPath().startsWith("eroded_");
     }
 
     /**

@@ -645,8 +645,8 @@ public final class Brain {
                 yield new ShoreTask();
             }
             case "unstuck" -> {
-                bot.event("stuck underground; climbing out");
-                yield new UnstuckTask();
+                bot.event(bot.player().isInWater() ? "stuck in water; climbing out" : "stuck underground; climbing out");
+                yield new UnstuckTask(true);
             }
             case "receive" -> new ReceiveTask();
             case "forage" -> {
