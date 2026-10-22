@@ -99,6 +99,41 @@ public final class Brain {
         noSleepUntil = System.currentTimeMillis() + 8 * 60_000L;
     }
 
+    /**
+     * Drop what we're doing because it has us stuck: a goal is snoozed as if it had failed, a job is
+     * reported failed, a reflex or wander just ends. The next tick picks something else.
+     */
+    public void giveUp(Bot bot, String why) {
+        if (active == null) return;
+        switch (active) {
+            case REFLEX -> {
+                if (reflex != null) reflex.stop(bot);
+                reflex = null;
+                reflexKind = null;
+            }
+            case JOB -> {
+                if (job == null) break;
+                if (job instanceof BoardJobTask b) skipPosts.put(b.postId(), System.currentTimeMillis() + 30 * 60_000L);
+                bot.reply(jobSource, "job failed: " + why);
+                clearJob();
+            }
+            case PROGRESS -> {
+                if (progress == null || milestone == null) break;
+                bot.event("giving up " + milestone.id() + " for now: " + why);
+                failStreak.merge(milestone.id(), 1, Integer::sum);
+                progression.snooze(milestone.id(), 10 * 60_000L);
+                progress.stop(bot);
+                progress = null;
+                milestone = null;
+            }
+            case IDLE -> {
+                if (idle != null) idle.stop(bot);
+                idle = null;
+            }
+        }
+        Nav.stop();
+    }
+
     public void stopAll(Bot bot) {
         for (Task t : new Task[]{reflex, job, progress, idle}) if (t != null) t.stop(bot);
         reflex = null;

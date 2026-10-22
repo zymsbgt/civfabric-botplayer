@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Wait until a teammate reports a bot that needs Claude, print it, and exit: one the team has never
 // had before, a known one sitting paused (back from a restart) or with nothing to do, or a bot asking
-// for help with something it isn't built to handle (relayed by whoever heard it on chat).
+// for help with something it isn't built to handle (relayed by whoever heard it on chat), or one
+// taking such a request back because it sorted itself out (RESOLVED: nothing to do).
 //
 // For Claude: run this in the background while leading the team. Its exit is the ping; start the
 // bot or give it work (through a leader in range), then run this again. It remembers the last alert it
@@ -69,6 +70,10 @@ for (;;) {
     const when = new Date(a.at).toLocaleTimeString();
     if (a.kind === "help") {
       console.log(`HELP from ${a.name}${a.via === "self" ? "" : ` (relayed by ${a.heard_by})`}${where}: ${a.text} (${when})`);
+      continue;
+    }
+    if (a.kind === "resolved") {
+      console.log(`RESOLVED ${a.name} no longer needs help${where}: ${a.text} (${when})`);
       continue;
     }
     const what = a.kind === "paused" ? "PAUSED" : a.kind === "idle" ? "IDLE (nothing to do)" : "NEW BOT";

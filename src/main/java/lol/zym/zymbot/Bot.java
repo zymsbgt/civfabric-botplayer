@@ -861,34 +861,68 @@ public final class Bot {
      * its state, the hub raises it, and Claude's watcher wakes; a leader's own request goes straight
      * in, as Claude leads through it. The same thing (numbers aside) is asked once per 10 minutes.
      */
-    public void askForHelp(String what) {
+    public String askForHelp(String what) {
         String text = what.length() > 200 ? what.substring(0, 200) : what;
         String key = text.replaceAll("-?\\d+", "#");
         long now = System.currentTimeMillis();
         Long at = askedAt.get(key);
-        if (at != null && now - at < 10 * 60_000L) return;
+        if (at != null && now - at < 10 * 60_000L) return null;
         askedAt.put(key, now);
+        String id = Long.toString(now, 36);
         event("asking for help: " + text);
-        team.radio().say(lol.zym.zymbot.team.ChatRadio.TAG + " hp " + text);
-        if (role() == Role.LEADER) team.radio().heardHelp(name(), text);
+        team.radio().say(lol.zym.zymbot.team.ChatRadio.TAG + " hp #" + id + " " + text);
+        if (role() == Role.LEADER) team.radio().heardHelp(name(), id, text);
+        return id;
     }
 
-    /** Five minutes on one spot when we should be getting somewhere: stranded, boxed in, or looping. */
+    /** Take a request back: it sorted itself out, and Claude needn't come. */
+    public void recallHelp(String id, String why) {
+        if (id == null) return;
+        event("no longer need help: " + why);
+        team.radio().say(lol.zym.zymbot.team.ChatRadio.TAG + " hr #" + id + " " + why);
+        if (role() == Role.LEADER) team.radio().heardRecall(name(), id, why);
+    }
+
+    /** The request we made when we got stuck, and where: taken back once we're moving again. */
+    private String stuckHelp;
+    private BlockPos stuckHelpAt;
+
+    /**
+     * Two minutes on one spot when we should be getting somewhere: stranded, boxed in, or looping.
+     * Leave the spot and whatever we were heading for (blacklisted half an hour, so a search picks
+     * another), drop the task, and ask for help. Moving on by ourselves takes the request back.
+     */
     private void checkStill() {
         BlockPos here = player().blockPosition();
         long now = System.currentTimeMillis();
+        if (stuckHelp != null && (!stuckHelpAt.closerThan(here, 8) || !enabled)) {
+            recallHelp(stuckHelp, "moving again: from " + stuckHelpAt.toShortString() + " to " + here.toShortString());
+            stuckHelp = null;
+        }
         String task = brain.describe();
-        boolean stays = !enabled || player().isSleeping() || task.startsWith("[idle]")
-                || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft").anyMatch(task::contains);
+        // idle with nothing to do stands still on purpose; exploring (the idle wander) should move
+        boolean stays = !enabled || player().isSleeping() || task.equals("[idle] nothing")
+                || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft", "Home for the night", "Catch")
+                        .anyMatch(task::contains);
         if (stays || stillAt == null || !stillAt.closerThan(here, 4)) {
             stillAt = stays ? null : here;
             stillSince = now;
             stillFrom = now;
             return;
         }
-        if (now - stillSince > 5 * 60_000L) {
-            askForHelp("haven't moved from " + here.toShortString() + " in 5 minutes: " + task);
+        if (now - stillSince > 2 * 60_000L) {
             stillSince = now;
+            BlockPos goal = Nav.goalPos();
+            memory.blacklist(here, 30 * 60_000L);
+            if (goal != null) memory.blacklist(goal, 30 * 60_000L);
+            String what = "stuck at " + here.toShortString() + " for 2 minutes" + (goal != null ? " heading for " + goal.toShortString() : "") + ": " + task;
+            event(what + "; leaving that" + (goal != null ? " goal" : "") + " for half an hour");
+            brain.giveUp(this, "stuck at " + here.toShortString());
+            String id = askForHelp(what);
+            if (id != null) {
+                stuckHelp = id;
+                stuckHelpAt = here;
+            }
         }
     }
 
@@ -1061,6 +1095,7 @@ public final class Bot {
         }
         o.add("team_heard", heardMates);
         o.add("help_heard", team.radio().helpHeard());
+        o.add("help_recalled", team.radio().helpRecalled());
         o.add("chests", lol.zym.zymbot.memory.ChestIndex.summary(this));
         o.add("landmarks", lol.zym.zymbot.memory.Landmarks.summary(this, 40));
         JsonObject homes = new JsonObject();

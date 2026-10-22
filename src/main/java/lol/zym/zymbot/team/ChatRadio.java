@@ -47,11 +47,16 @@ public final class ChatRadio {
 
     private record Heard(JsonObject state, long at) {}
 
-    /** A teammate (or we, as a leader) asked for Claude: passed on in our state for the hub to raise. */
-    private record Help(String from, String text, long at) {}
+    /**
+     * A teammate (or we, as a leader) asked for Claude, or took a request back because it sorted
+     * itself out: passed on in our state for the hub to raise. The id is the asker's, so every bot
+     * that heard it passes on the same request.
+     */
+    private record Help(String from, String id, String text, long at) {}
 
     private static final long HELP_KEEP_MS = 15 * 60_000L;
     private final ArrayDeque<Help> helps = new ArrayDeque<>();
+    private final ArrayDeque<Help> recalls = new ArrayDeque<>();
 
     private final ArrayDeque<String> outbox = new ArrayDeque<>();
     private final Map<String, Heard> heard = new LinkedHashMap<>();
@@ -220,8 +225,14 @@ public final class ChatRadio {
             switch (w[1]) {
                 case "st" -> status(bot, from, w[2]);
                 case "hp" -> {
-                    heardHelp(from, w[2]);
-                    bot.event(from + " is asking for help: " + w[2]);
+                    String[] h = helpId(w[2]);
+                    heardHelp(from, h[0], h[1]);
+                    bot.event(from + " is asking for help: " + h[1]);
+                }
+                case "hr" -> {
+                    String[] h = helpId(w[2]);
+                    heardRecall(from, h[0], h[1]);
+                    bot.event(from + " no longer needs help: " + h[1]);
                 }
                 case "fc" -> {
                     JsonObject r = JsonParser.parseString(w[2]).getAsJsonObject();
@@ -291,20 +302,43 @@ public final class ChatRadio {
         }
     }
 
+    /** "#id text" -> {id, text}; a line from a bot too old to send ids has none. */
+    private static String[] helpId(String s) {
+        if (s.startsWith("#") && s.indexOf(' ') > 1) return new String[]{s.substring(1, s.indexOf(' ')), s.substring(s.indexOf(' ') + 1)};
+        return new String[]{null, s};
+    }
+
     /** Keep a request for help to pass on (a teammate's heard on chat, or a leader's own). */
-    public void heardHelp(String from, String text) {
-        helps.addLast(new Help(from, text, System.currentTimeMillis()));
+    public void heardHelp(String from, String id, String text) {
+        helps.addLast(new Help(from, id, text, System.currentTimeMillis()));
         while (helps.size() > 20) helps.removeFirst();
+    }
+
+    /** A request taken back (it sorted itself out): passed on, and no longer passed on as a request. */
+    public void heardRecall(String from, String id, String text) {
+        if (id != null) helps.removeIf(h -> h.from().equalsIgnoreCase(from) && id.equals(h.id()));
+        recalls.addLast(new Help(from, id, text, System.currentTimeMillis()));
+        while (recalls.size() > 20) recalls.removeFirst();
     }
 
     /** Requests heard lately, for our state: the hub raises each once, for Claude. */
     public JsonArray helpHeard() {
+        return json(helps);
+    }
+
+    /** Requests taken back lately, for our state: the hub tells Claude each one is over. */
+    public JsonArray helpRecalled() {
+        return json(recalls);
+    }
+
+    private static JsonArray json(ArrayDeque<Help> list) {
         long now = System.currentTimeMillis();
-        helps.removeIf(h -> now - h.at() > HELP_KEEP_MS);
+        list.removeIf(h -> now - h.at() > HELP_KEEP_MS);
         JsonArray out = new JsonArray();
-        for (Help h : helps) {
+        for (Help h : list) {
             JsonObject o = new JsonObject();
             o.addProperty("from", h.from());
+            if (h.id() != null) o.addProperty("id", h.id());
             o.addProperty("text", h.text());
             o.addProperty("at", h.at());
             out.add(o);

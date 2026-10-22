@@ -143,6 +143,13 @@ public final class Nav {
         return b.getCustomGoalProcess().isActive() || b.getMineProcess().isActive() || b.getBuilderProcess().isActive();
     }
 
+    /** Where Baritone is trying to get to, when its goal is a place (not "away from" or a column). */
+    public static BlockPos goalPos() {
+        Goal g = baritone().getPathingBehavior().getGoal();
+        if (g == null) g = lastGoal;
+        return g instanceof baritone.api.utils.interfaces.IGoalRenderPos r ? r.getGoalPos() : null;
+    }
+
     public static void stop() {
         lastGoal = null;
         IBaritone b = baritone();

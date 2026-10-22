@@ -190,13 +190,31 @@ function noteHeard(sv, st) {
   }
   // a bot asking for Claude: something it isn't built for. Heard on chat by a teammate (or the
   // asker's own, if it leads), relayed here in that teammate's state, raised once
-  for (const x of st.help_heard || []) {
-    const key = `${String(x.from).toLowerCase()}|${x.at}`;
-    if (!x.from || sv.helped.has(key)) continue;
+  // the asker's id, when it sends one, is the same whoever relays it: raised once, not per listener
+  const helpKey = (x) => `${String(x.from).toLowerCase()}|${x.id ?? x.at}`;
+  const remember = (key) => {
     sv.helped.add(key);
     if (sv.helped.size > 500) sv.helped.delete(sv.helped.values().next().value);
+  };
+  // taken back (the bot sorted itself out): Claude is told it's over, if it was ever raised, and a
+  // request not yet relayed never is
+  for (const x of st.help_recalled || []) {
+    const key = helpKey(x);
+    if (!x.from || sv.helped.has(key + "|over")) continue;
+    const raised = sv.helped.has(key);
+    remember(key);
+    remember(key + "|over");
+    if (!raised) continue;
     const asker = member(sv, x.from);
-    raise(sv, "help", { name: x.from, pos: asker?.state.pos, dim: asker?.state.dim, via: x.from === st.name ? "self" : "chat" }, st, { text: x.text });
+    raise(sv, "resolved", { name: x.from, pos: asker?.state.pos, dim: asker?.state.dim, via: x.from === st.name ? "self" : "chat" }, st, { text: x.text, id: x.id });
+    console.log(`${x.from} no longer needs help (heard by ${st.name}): ${x.text}`);
+  }
+  for (const x of st.help_heard || []) {
+    const key = helpKey(x);
+    if (!x.from || sv.helped.has(key)) continue;
+    remember(key);
+    const asker = member(sv, x.from);
+    raise(sv, "help", { name: x.from, pos: asker?.state.pos, dim: asker?.state.dim, via: x.from === st.name ? "self" : "chat" }, st, { text: x.text, id: x.id });
     console.log(`${x.from} asks for help (heard by ${st.name}): ${x.text}`);
   }
   // the first few minutes on a server we had no list for: what's there now is the team, not news
