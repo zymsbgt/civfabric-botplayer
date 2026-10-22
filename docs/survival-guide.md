@@ -113,9 +113,9 @@ before.
 | Miner | Ancient debris: 100. Diamond ore: 30–35. Gold, emerald and redstone ore: 18–21. Amethyst: 20. ×2.5 with pacifism off. |
 | Blacksmith | Smelting or blasting: gold 8, iron 6, copper 3. Crafting: diamond chestplate 80, iron chestplate 40, master ball 200. Repairs: 1. |
 | Builder | Placing building blocks: 1–2 (diamond block 10). Crafting: cauldron 21, iron doors and bars 18, hopper 15. |
-| Librarian | Crafting: map 18, writable book 12, compass 12. Villager trades. Lunar forecast guesses: up to 160, ×5 with a scroll. |
+| Librarian | Crafting: map 18, writable book 12, compass 12, signs 3. Villager trades. Blessing gear 20. Reads the lunar forecast more accurately (so do Hunters). A forecast guess pays up to 160 (×5 with a scroll) in whichever class it names. |
 | Medic | Crafting: hearty soup 50, first aid kit 40, medkit 20. Treating players with stitches: 15 + 8.75 per rank. Golden apples: 10. |
-| Hunter | Killing wild Pokémon: 2 + 0.25 per level. Killing mobs and animals. Lunar forecast guesses. Cobblemon captures and battles pay **nothing**. |
+| Hunter | Killing wild Pokémon: 2 + 0.25 per level. Killing mobs (4–12) and livestock (2). Cobblemon captures and battles pay **nothing**. |
 
 **XP multipliers:**
 - Blood moons: up to ×16 on a super blood moon.
@@ -305,12 +305,35 @@ team of four bots covers everything:
 
 | Bot | Specialisations | Role |
 |---|---|---|
-| Smith | Blacksmith, Builder, Librarian | Tools, armour, buckets, portals, boats, enchanting. |
+| Smith | Blacksmith, Builder, Librarian (2 slots: Blacksmith, Builder) | Tools, armour, buckets, portals, boats, enchanting. Stays at the base, and all three classes level there. |
 | Delver | Miner, Hunter, Builder | Ores and diamonds, fighting, walls. |
 | Grower | Farmer, Medic, Hunter | Food, healing, revives, golden apples and carrots, potions. |
 | Scholar | Librarian, Medic, Farmer | Enchanting, forecasts, XP books, back-up healer. |
 
 Gated items move between bots on the job boards. That's what boards and sub-requests are for.
+
+**Levelling at home.** A death costs half of a bot's class XP, so the Smith stays at the base and
+levels there. How much of each class's XP can be earned without leaving:
+
+| Class | At base | What earns it there | Brought in by |
+|---|---|---|---|
+| Blacksmith | Nearly all | Smelting ore (iron 6, gold 8) and charcoal (2), crafting tools and armour, anvil repairs. | Raw ore and coal from the Delver; logs. |
+| Builder | Most | Smelting cobble to stone (1), then placing stone bricks (2). Planks (4 per log) and glass. Iron bars (18 each, from Builder 3), reinforcing walls with copper or iron. Placing cobble or stone pays nothing. | Cobble, iron and copper from the Delver; logs; sand. |
+| Librarian | Most | Books, maps, compasses, signs (3 each, 3 per craft). Blessing gear from Journeyman (20). Villager trades if villagers live at the base. | Sugar cane from the farm; leather from the Hunter; logs. |
+| Farmer | Most | The farm (7 a crop), cooking meat (5–7), breeding (6–10). | Meat from the Hunter. Takes crops from the Grower. |
+| Medic | Most | Stitches, medkits and first aid kits. Treating teammates who come home hurt (15–50). Blessing food from Apprentice. | Sugar cane; gold for golden apples; spider eyes. |
+| Hunter | Little | Killing animals from a pen (2 each). Mob kills during a siege. | Most of it means going out to hunt. |
+| Miner | Almost none | Breaking stone and ore, so it means digging. Mining stone at home pays Miner, not Builder. | — |
+
+A forecast guess (`/guessforecast`) pays whichever class it names, not only Librarian or Hunter.
+Librarian or Hunter rank only makes the reading more accurate. So it's a little XP at home for any
+class. Paper pays Medic until the Librarian outranks the Medic, so a Novice Librarian shouldn't make
+paper.
+
+The Smith keeps Blacksmith, Builder and Librarian because all three level at home. Builder is the
+only Builder on a two-slot world, and only the Smith holds Builder and Librarian together, which
+boats need at rank 5. Farmer would also level at home, but its crops are the Grower's living. Medic
+already sits with the Grower and the Scholar.
 
 ## What the bots get wrong today
 
