@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
+            "board", "post", "cancel", "blocks", "map", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -109,6 +109,32 @@ public final class Commands {
                         sb.append("\n").append(dy >= 0 ? "+" : "").append(dy).append(':');
                         for (BlockPos p : new BlockPos[]{me.offset(0, dy, 0), me.offset(1, dy, 0), me.offset(-1, dy, 0), me.offset(0, dy, 1), me.offset(0, dy, -1)}) {
                             sb.append(' ').append(BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(p).getBlock()).getPath());
+                        }
+                    }
+                    return sb.toString();
+                }
+                case "map" -> {
+                    // debugging aid: a slice from above per layer, y-2 .. y+3, around a spot (default us).
+                    // Rows run north to south (z), columns west to east (x)
+                    BlockPos c = bot.player().blockPosition();
+                    int r = 4;
+                    try {
+                        if (a.length >= 4) c = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                        if (a.length == 2 || a.length == 5) r = Math.min(8, Integer.parseInt(a[a.length - 1]));
+                    } catch (NumberFormatException e) {
+                        return "map [x y z] [radius up to 8]";
+                    }
+                    BlockPos me = bot.player().blockPosition();
+                    StringBuilder sb = new StringBuilder("map at " + c.toShortString() + " (# solid . air ~ water B bed C chest D door"
+                            + " L ladder S stairs/slab T trapdoor F fence/wall c crop f farmland @ us)");
+                    for (int dy = 3; dy >= -2; dy--) {
+                        sb.append("\ny").append(c.getY() + dy).append(':');
+                        for (int dz = -r; dz <= r; dz++) {
+                            sb.append(dz == -r ? " " : "|");
+                            for (int dx = -r; dx <= r; dx++) {
+                                BlockPos q = c.offset(dx, dy, dz);
+                                sb.append(q.equals(me) ? '@' : mapChar(bot.level().getBlockState(q)));
+                            }
                         }
                     }
                     return sb.toString();
@@ -630,6 +656,23 @@ public final class Commands {
                 return null;
             }
         }
+    }
+
+    /** One character per block for the "map" command. */
+    private static char mapChar(net.minecraft.world.level.block.state.BlockState s) {
+        var b = s.getBlock();
+        if (s.isAir()) return '.';
+        if (s.is(net.minecraft.tags.BlockTags.BEDS)) return 'B';
+        if (b instanceof net.minecraft.world.level.block.ChestBlock || b instanceof net.minecraft.world.level.block.BarrelBlock) return 'C';
+        if (s.is(net.minecraft.tags.BlockTags.DOORS)) return 'D';
+        if (s.is(net.minecraft.tags.BlockTags.CLIMBABLE)) return 'L';
+        if (s.is(net.minecraft.tags.BlockTags.STAIRS) || s.is(net.minecraft.tags.BlockTags.SLABS)) return 'S';
+        if (s.is(net.minecraft.tags.BlockTags.TRAPDOORS)) return 'T';
+        if (s.is(net.minecraft.tags.BlockTags.FENCES) || s.is(net.minecraft.tags.BlockTags.WALLS) || s.is(net.minecraft.tags.BlockTags.FENCE_GATES)) return 'F';
+        if (b instanceof net.minecraft.world.level.block.FarmBlock) return 'f';
+        if (b instanceof net.minecraft.world.level.block.CropBlock) return 'c';
+        if (!s.getFluidState().isEmpty()) return '~';
+        return s.blocksMotion() ? '#' : ',';
     }
 
     private static String board(Bot bot, String[] a) {
