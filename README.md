@@ -199,8 +199,9 @@ mirrors ZymLabs local chat: **bots more than 150 blocks apart, or in different d
 communicate.** The hub enforces this from the positions bots report. Every radio message, every
 "who's near me" query and every job-board action is checked. There's no relaying.
 
-- **Roles**: `worker` plays on its own and takes jobs. `leader` survives and otherwise waits
-  for direction: that's the bot Claude drives.
+- **Roles**: `worker` plays on its own and takes jobs. `leader` does the same, and is also the
+  bot Claude reaches the team through: Claude sees what it sees, commands bots in its range, and
+  hears the help calls it relays. A job Claude gives it comes before its own goals.
 - **Teammates**: humans listed in `teammates` can command bots in chat (heard within 150
   blocks, as the server limits chat): `zb Bot3 get oak_log 32`, `zb all come`,
   `zb follow` (every bot that hears it).

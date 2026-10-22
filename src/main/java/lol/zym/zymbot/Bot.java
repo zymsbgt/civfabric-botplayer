@@ -45,10 +45,6 @@ public final class Bot {
     public enum Role {
         WORKER, LEADER;
 
-        public boolean autonomous() {
-            return this == WORKER;
-        }
-
         public static Role parse(String s) {
             return switch (s == null ? "" : s.toLowerCase(Locale.ROOT)) {
                 case "worker", "auto", "autonomous" -> WORKER;

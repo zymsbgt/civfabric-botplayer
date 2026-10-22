@@ -30,7 +30,7 @@ import java.util.Set;
  * <ol>
  *   <li>reflexes: flee, fight, eat, sleep, recover a grave — always, for every role</li>
  *   <li>the job a teammate or the leader assigned (gather, follow, give, farm, goto...)</li>
- *   <li>autonomous progression ({@link Progression}) — only for the "worker" role</li>
+ *   <li>autonomous progression ({@link Progression}), for leaders too</li>
  *   <li>idle: catch Pokémon, wander</li>
  * </ol>
  * Lower layers are paused (stopped, but kept) while a higher one runs, then resumed.
@@ -230,7 +230,7 @@ public final class Brain {
         }
 
         // hurt with no way to heal on our own: no risky work until a medic or a warm bed fixes it
-        boolean fragile = bot.role().autonomous() && bot.health().fragile(bot);
+        boolean fragile = bot.health().fragile(bot);
         // the way out of fragile is a warm bed: let it work on that (and other quiet jobs at home)
         if (fragile && progress == null && progression.next(true) != null && bot.ticks() >= nextFragileWork) {
             nextFragileWork = bot.ticks() + 200;
@@ -266,52 +266,50 @@ public final class Brain {
             return;
         }
 
-        if (bot.role().autonomous() && !fragile && BotConfig.get().takeBoardJobs && progression.basicsDone()
+        if (!fragile && BotConfig.get().takeBoardJobs && progression.basicsDone()
                 && !claimPending && bot.ticks() >= nextBoardCheck && Inv.freeSlots() > 0) {
             nextBoardCheck = bot.ticks() + 200;
             tryClaim(bot);
         }
 
-        if (bot.role().autonomous()) {
-            for (Progression.Wait w : progression.newWaits()) {
-                bot.event(w.milestone().id() + " needs " + w.why() + ": waiting for the rank or a teammate");
-                askBoard(bot, ItemTarget.of(w.item(), w.count()));
-            }
-            if (progress == null) {
-                milestone = progression.next();
-                if (milestone != null) {
-                    progress = milestone.make().apply(bot);
-                    if (progress == null) {
-                        progression.snooze(milestone.id(), 5 * 60_000L);
-                        milestone = null;
-                    } else {
-                        bot.event("working on " + milestone.id());
-                    }
-                }
-            }
-            if (progress != null) {
-                pause(bot, Layer.PROGRESS);
-                Task.Status s = progress.tick(bot);
-                if (s != Task.Status.RUNNING) {
-                    if (s == Task.Status.FAILURE) {
-                        bot.event("couldn't finish " + milestone.id() + ": " + progress.failureReason());
-                        int streak = failStreak.merge(milestone.id(), 1, Integer::sum);
-                        if (streak >= 3) bot.askForHelp("can't finish " + milestone.id() + " (" + streak + " tries): " + progress.failureReason());
-                        progression.snooze(milestone.id(), 10 * 60_000L);
-                        if (progress instanceof ObtainTask o) askBoard(bot, o.target());
-                    } else if (milestone.done().getAsBoolean()) {
-                        failStreak.remove(milestone.id());
-                        bot.event("milestone " + milestone.id() + " done");
-                    } else if (progress.ticks < 40) {
-                        // ended at once and nothing changed: it would start again every tick
-                        progression.snooze(milestone.id(), 60_000L);
-                    }
-                    progress.stop(bot);
-                    progress = null;
+        for (Progression.Wait w : progression.newWaits()) {
+            bot.event(w.milestone().id() + " needs " + w.why() + ": waiting for the rank or a teammate");
+            askBoard(bot, ItemTarget.of(w.item(), w.count()));
+        }
+        if (progress == null) {
+            milestone = progression.next();
+            if (milestone != null) {
+                progress = milestone.make().apply(bot);
+                if (progress == null) {
+                    progression.snooze(milestone.id(), 5 * 60_000L);
                     milestone = null;
+                } else {
+                    bot.event("working on " + milestone.id());
                 }
-                return;
             }
+        }
+        if (progress != null) {
+            pause(bot, Layer.PROGRESS);
+            Task.Status s = progress.tick(bot);
+            if (s != Task.Status.RUNNING) {
+                if (s == Task.Status.FAILURE) {
+                    bot.event("couldn't finish " + milestone.id() + ": " + progress.failureReason());
+                    int streak = failStreak.merge(milestone.id(), 1, Integer::sum);
+                    if (streak >= 3) bot.askForHelp("can't finish " + milestone.id() + " (" + streak + " tries): " + progress.failureReason());
+                    progression.snooze(milestone.id(), 10 * 60_000L);
+                    if (progress instanceof ObtainTask o) askBoard(bot, o.target());
+                } else if (milestone.done().getAsBoolean()) {
+                    failStreak.remove(milestone.id());
+                    bot.event("milestone " + milestone.id() + " done");
+                } else if (progress.ticks < 40) {
+                    // ended at once and nothing changed: it would start again every tick
+                    progression.snooze(milestone.id(), 60_000L);
+                }
+                progress.stop(bot);
+                progress = null;
+                milestone = null;
+            }
+            return;
         }
 
         pause(bot, Layer.IDLE);
@@ -813,7 +811,7 @@ public final class Brain {
             return "sleep";
         // something on the shopping list a few steps away: pick it up on the way. Only between our
         // own goals (never on a job someone gave us), by day, healthy, and not under a blood moon
-        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && bot.role().autonomous()
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE)
                 && System.currentTimeMillis() > noDetourUntil && bot.ticks() % 40 == 0 && !WorldView.isNight()
                 && !bot.pacifism().bloodMoon() && !bot.health().hurt(bot) && !wet && Inv.freeSlots() > 2) {
             Task doing = active == Layer.PROGRESS ? progress : idle;
@@ -829,7 +827,7 @@ public final class Brain {
         // a teammate close by would get more out of some of our food than we would (Spice of Fabric
         // pays little for the tenth loaf, a lot for the first): walk over and hand it across. Between
         // our own goals, by the same rules as a detour, and looked at every 10 s
-        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && bot.role().autonomous()
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE)
                 && System.currentTimeMillis() > noShareUntil && bot.ticks() % 200 == 100 && !bot.pacifism().bloodMoon()
                 && !bot.health().hurt(bot) && !wet && !bot.team().inRange().isEmpty()) {
             noShareUntil = System.currentTimeMillis() + 10_000;
@@ -946,7 +944,6 @@ public final class Brain {
     private Task makeIdle(Bot bot) {
         if (BotConfig.get().catchPokemon && Inv.find(CatchPokemonTask::isBall) >= 0 && CatchPokemonTask.findWild(bot, 24) != null)
             return new CatchPokemonTask();
-        if (!bot.role().autonomous()) return null; // leaders wait for direction
         return new ExploreTask(48);
     }
 }

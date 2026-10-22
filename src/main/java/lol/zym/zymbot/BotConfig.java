@@ -25,7 +25,8 @@ public final class BotConfig {
 
     /**
      * "worker": plays on its own (progression) and takes jobs from teammates.
-     * "leader": survives but otherwise waits for direction — the role for a bot Claude drives.
+     * "leader": the bot Claude reaches the team through. It works on its own like a worker; a job
+     * Claude gives it comes first, and it passes the help calls it hears on to Claude.
      */
     public String role = "worker";
 
