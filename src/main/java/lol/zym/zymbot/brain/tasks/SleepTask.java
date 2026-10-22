@@ -28,6 +28,10 @@ public class SleepTask extends Task {
     private int clicks;
     private boolean read;
     private BlockPos stand;
+    /** Standing spots Baritone couldn't get us any closer to. */
+    private final java.util.Set<BlockPos> unreachable = new java.util.HashSet<>();
+    private double standBest = Double.MAX_VALUE;
+    private int standBestAt;
     private lol.zym.zymbot.control.Breaker clearing;
     private int cleared;
 
@@ -72,8 +76,28 @@ public class SleepTask extends Task {
         if (!inBedRange(p.position())) {
             // a spot to stand on that passes vanilla's range test: "next to the bed" to Baritone
             // includes right under it, where Bot2 stood in a hole below its bed until it gave up
-            if (stand == null || ticks % 100 == 0) stand = standingSpot(p.blockPosition());
-            if (stand != null) Nav.goTo(new baritone.api.pathing.goals.GoalBlock(stand));
+            if (stand == null || ticks % 100 == 0) {
+                BlockPos was = stand;
+                stand = standingSpot(p.blockPosition());
+                if (stand != null && !stand.equals(was)) {
+                    standBest = Double.MAX_VALUE;
+                    standBestAt = ticks;
+                }
+            }
+            if (stand != null) {
+                // no closer for 15 s: Baritone has no way there (Bot2 stood still two minutes by its
+                // house); try the next spot
+                double d = p.position().distanceTo(Vec3.atBottomCenterOf(stand));
+                if (d < standBest - 0.5) {
+                    standBest = d;
+                    standBestAt = ticks;
+                } else if (ticks - standBestAt > 20 * 15) {
+                    unreachable.add(stand);
+                    stand = null;
+                    return Status.RUNNING;
+                }
+                Nav.goTo(new baritone.api.pathing.goals.GoalBlock(stand));
+            }
             else Nav.goToBlock(bed);
             if (ticks > 20 * 120) return fail("can't reach bed" + (stand == null ? " (nowhere to stand beside it)" : ""));
             return Status.RUNNING;
@@ -118,7 +142,9 @@ public class SleepTask extends Task {
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
         for (BlockPos q : BlockPos.betweenClosed(bed.offset(-3, -1, -3), bed.offset(3, 1, 3))) {
-            if (q.equals(bed) || q.equals(other) || !WorldView.standable(q) || WorldView.water(q)) continue;
+            if (q.equals(bed) || q.equals(other) || unreachable.contains(q) || !WorldView.standable(q) || WorldView.water(q)) continue;
+            // nor on a floor Baritone keeps off (eroded sand, campfires): it would never path there
+            if (baritone.api.BaritoneAPI.getSettings().blocksToAvoid.value.contains(WorldView.state(q.below()).getBlock())) continue;
             Vec3 at = Vec3.atBottomCenterOf(q);
             if (!near(at, bed) && !near(at, other)) continue;
             double d = q.distSqr(from);
