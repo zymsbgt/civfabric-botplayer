@@ -72,6 +72,7 @@ public final class FightOdds {
         if (mobs.stream().anyMatch(FightOdds::tridentDrowned) && allies.size() < 2) return false;
         double ours = ourKit(bot);
         for (Player o : allies) ours += kit(o.getArmorValue(), o.getMainHandItem(), o.getOffhandItem().is(Items.SHIELD));
-        return Math.ceil(ours) >= danger(mobs);
+        // the careful (the team's Blacksmith) only take on what they'd beat with room to spare
+        return Math.ceil(ours) >= danger(mobs) + (bot.careful() ? 2 : 0);
     }
 }

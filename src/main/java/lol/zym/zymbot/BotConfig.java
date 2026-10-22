@@ -141,6 +141,13 @@ public final class BotConfig {
     /** Throw Poké Balls at wild Pokémon when the bot has some. */
     public boolean catchPokemon = true;
 
+    /**
+     * Classes whose bot plays it safe: runs sooner, rests sooner, spends nights at home and levels
+     * from the base. The team's Blacksmith by default: stone tools wait on its rank, and a death
+     * halves it (Bot2 fell from Apprentice back to Novice and 18 tool requests waited).
+     */
+    public List<String> carefulClasses = new ArrayList<>(List.of("blacksmith"));
+
     /** Health (half hearts) at which the bot stops fighting and runs. */
     public int fleeHealth = 7;
 

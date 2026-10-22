@@ -168,6 +168,12 @@ public class LevelTask extends Task {
             }
         }
 
+        // the careful (the team's Blacksmith) level from the base: what takes us out into the wild
+        // counts for a quarter, so smelting, crafting and building at home win when there are any
+        if (bot.careful()) {
+            options.replaceAll(o -> o.what().startsWith("breaking") || o.what().startsWith("gathering") || o.what().startsWith("hunting")
+                    ? new Option(o.what() + " (away from base)", o.score() / 4, o.make()) : o);
+        }
         return options.stream().max(Comparator.comparingDouble(Option::score)).orElse(null);
     }
 

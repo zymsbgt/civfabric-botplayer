@@ -537,6 +537,12 @@ public final class Bot {
         return best;
     }
 
+    /** One of the classes that plays it safe ({@code carefulClasses}): the team can't afford its deaths. */
+    public boolean careful() {
+        for (String c : lol.zym.zymbot.brain.ClassPlan.classes(this)) if (BotConfig.get().carefulClasses.contains(c)) return true;
+        return false;
+    }
+
     /** Note where every player in sight is, and where the teammates in radio range say they are. */
     private void notePlayers() {
         long now = level().getGameTime();

@@ -50,12 +50,13 @@ public final class Health {
     /** Health at which to stop fighting and run: much earlier when it won't come back. */
     public float fleeAt(Bot bot) {
         int cfg = BotConfig.get().fleeHealth;
-        return naturalRegen(bot) ? cfg : Math.max(cfg, 12);
+        // the careful (the team's Blacksmith) get away with a heart or two more in hand
+        return naturalRegen(bot) ? cfg : Math.max(cfg, bot.careful() ? 15 : 12);
     }
 
     /** Too hurt to take risks: rest near home until healed. */
     public boolean fragile(Bot bot) {
-        return !naturalRegen(bot) && bot.player().getHealth() <= 10;
+        return !naturalRegen(bot) && bot.player().getHealth() <= (bot.careful() ? 14 : 10);
     }
 
     public boolean hurt(Bot bot) {

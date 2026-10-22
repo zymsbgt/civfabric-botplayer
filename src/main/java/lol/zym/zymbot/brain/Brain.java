@@ -609,6 +609,18 @@ public final class Brain {
         var bedHome = !wet && Forecast.braceTime(bot) ? BraceTask.home(bot) : null;
         if (bedHome != null && bedHome.pos().closerThan(p.blockPosition(), 128) && !bedHome.pos().closerThan(p.blockPosition(), 8))
             return "brace";
+        // the careful (the team's Blacksmith: a death halves the rank stone tools wait on) spend every
+        // night at home: walk back at dusk, then a warm bed if the night watch allows, else dig in
+        if (bot.careful() && WorldView.isNight() && !wet) {
+            var h = BraceTask.home(bot);
+            if (h != null && !h.pos().closerThan(p.blockPosition(), 8) && h.pos().closerThan(p.blockPosition(), 256)) return "nightfall";
+            boolean bed = cfg.sleep && bot.memory().bed != null && bot.memory().bedWarm && System.currentTimeMillis() > noSleepUntil
+                    && bot.dim().equals(bot.memory().bed.dim) && bot.memory().bed.pos().closerThan(p.blockPosition(), 16);
+            if (bed) return "sleep";
+            // ShelterTask holds only on a night marked dangerous: mark this one, as a trident does
+            if (!hideNight(bot)) hideTonight(bot, "careful (" + String.join(", ", ClassPlan.classes(bot)) + "): the night at home");
+            return "shelter";
+        }
         // a grave trip is a long walk: not unarmed (unless it's close), the progression makes a sword first
         if (bot.pendingGrave() != null && (Inv.armed() || bot.pendingGrave().closerThan(p.blockPosition(), 48))) return "grave";
         if (bot.receiving()) return "receive";
@@ -700,7 +712,8 @@ public final class Brain {
             case "eat" -> new EatTask();
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
             case "shelter" -> {
-                bot.event((bot.pacifism().bloodMoon() ? "blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "") : "storm night: drowned are hunting")
+                bot.event((bot.pacifism().bloodMoon() ? "blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "")
+                        : ShelterTask.stormNight(bot) ? "storm night: drowned are hunting" : hideNight(bot) ? hideWhy : "night")
                         + ": taking shelter until dawn");
                 yield new ShelterTask();
             }
@@ -737,6 +750,10 @@ public final class Brain {
                 yield Progression.food(bot);
             }
             case "sleep" -> new SleepTask(bot.memory().bed.pos());
+            case "nightfall" -> {
+                bot.event("night: home to the base (careful: " + String.join(", ", ClassPlan.classes(bot)) + ")");
+                yield new BraceTask(true);
+            }
             case "brace" -> {
                 bot.event("blood moon forecast: heading home before dusk");
                 yield new BraceTask();

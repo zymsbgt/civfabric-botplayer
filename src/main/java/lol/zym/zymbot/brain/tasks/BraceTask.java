@@ -13,14 +13,25 @@ import lol.zym.zymbot.nav.Nav;
  * the night has begun without one (readings can be wrong).
  */
 public class BraceTask extends Task {
+    /** Every night, not just a forecast blood moon: the careful bot's walk home at dusk. */
+    private final boolean nightly;
+
+    public BraceTask() {
+        this(false);
+    }
+
+    public BraceTask(boolean nightly) {
+        this.nightly = nightly;
+    }
+
     @Override
     public String name() {
-        return "Home before the forecast blood moon";
+        return nightly ? "Home for the night" : "Home before the forecast blood moon";
     }
 
     @Override
     protected Status onTick(Bot bot) {
-        if (bot.pacifism().bloodMoon() || !Forecast.braceTime(bot)) return Status.SUCCESS;
+        if (nightly ? !lol.zym.zymbot.world.WorldView.isNight() : bot.pacifism().bloodMoon() || !Forecast.braceTime(bot)) return Status.SUCCESS;
         BotMemory.Pos h = home(bot);
         if (h == null) return Status.SUCCESS;
         if (!h.pos().closerThan(bot.player().blockPosition(), 4)) {
