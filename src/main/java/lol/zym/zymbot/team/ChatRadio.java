@@ -29,11 +29,12 @@ import java.util.Set;
  *
  * <p>Lines for bots start with {@value #TAG}. Everyone nearby sees them, players too, so there are
  * few: a status line about once a minute ("st"), each forecast reading of our own once ("fc"), each
- * forecast trust decision once ("tr"), and our food when it changes, a minute apart at most ("fd").
- * Commands to teammates are ordinary "zb Bot2 come" lines. A status line heard makes its sender a
- * teammate in range, with the fields the rest of the bot reads from a hub member (role, classes,
- * bases, fields, forecasts, food), until it goes quiet. Lines count from the names in our teammates
- * list and from bots the hub has shown us.
+ * forecast trust decision once ("tr"), our food when it changes, a minute apart at most ("fd"), and
+ * team chests as changes and answers ({@link ChestRadio}: "cc", "wh?", "ls"). Commands to
+ * teammates are ordinary "zb Bot2 come" lines. A status line heard makes its sender a teammate in
+ * range, with the fields the rest of the bot reads about a teammate (role, classes, bases, fields,
+ * forecasts, food), until it goes quiet: bots talk over chat only. Lines count from the names in
+ * our teammates list and from bots the hub has shown us.
  *
  * <p>Vanilla kicks a player for more than about one chat line a second, and the bot also sends
  * commands (/bed, /pacifist...) through the same counter: lines go out one every two seconds.
@@ -100,6 +101,11 @@ public final class ChatRadio {
                 lastFood = food;
                 say(food);
             }
+        }
+        // chest lines last of all: only into an empty outbox
+        if (outbox.isEmpty() && now - sentAt > SPACING_MS) {
+            String chest = ChestRadio.next(bot);
+            if (chest != null) outbox.addLast(chest);
         }
         if (!outbox.isEmpty() && now - sentAt > SPACING_MS) {
             sentAt = now;
@@ -239,6 +245,10 @@ public final class ChatRadio {
                     JsonObject r = JsonParser.parseString(w[2]).getAsJsonObject();
                     readings.computeIfAbsent(key(from), k -> new LinkedHashMap<>())
                             .put(r.get("reader").getAsString() + " " + r.get("night").getAsLong(), r);
+                    touch(from);
+                }
+                case "cc", "wh?", "ls" -> {
+                    ChestRadio.hear(bot, from, w[1], w[2]);
                     touch(from);
                 }
                 case "fd" -> {

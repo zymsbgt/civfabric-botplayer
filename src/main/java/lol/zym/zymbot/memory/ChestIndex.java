@@ -43,10 +43,15 @@ public final class ChestIndex {
         return dim + " " + p.getX() + " " + p.getY() + " " + p.getZ();
     }
 
+    /** The team chest open now, and what it held before we opened it: what we change goes on the radio. */
+    private static String openKey;
+    private static Map<String, Integer> before;
+
     /** Called every tick: while a container we opened is showing, keep its record current. */
     public static void tick(Bot bot) {
         var p = bot.player();
         AbstractContainerMenu menu = p.containerMenu;
+        if (menu == p.inventoryMenu && openKey != null) closed(bot);
         if (menu == p.inventoryMenu || lastUsed == null || bot.ticks() - lastUsedTick > 20 * 60) return;
         int size;
         if (menu instanceof ChestMenu c) size = c.getRowCount() * 9;
@@ -58,11 +63,32 @@ public final class ChestIndex {
         record(bot, lastUsed, menu, size);
     }
 
+    /** Shut: tell teammates in earshot what changed in a team chest while we had it open. */
+    private static void closed(Bot bot) {
+        BotMemory.ChestRecord r = bot.memory().chests.get(openKey);
+        if (r != null && takeable(r) && !r.lootr && before != null) {
+            Map<String, Integer> now = new LinkedHashMap<>();
+            Set<String> ids = new HashSet<>(before.keySet());
+            ids.addAll(r.items.keySet());
+            for (String id : ids) {
+                int was = before.getOrDefault(id, 0), is = r.items.getOrDefault(id, 0);
+                if (was != is) now.put(id, is);
+            }
+            lol.zym.zymbot.team.ChestRadio.changed(bot, r, now);
+        }
+        openKey = null;
+        before = null;
+    }
+
     private static void record(Bot bot, BlockPos pos, AbstractContainerMenu menu, int size) {
         var mem = bot.memory();
         String k = key(bot.dim(), pos);
         BotMemory.ChestRecord r = mem.chests.computeIfAbsent(k, x -> new BotMemory.ChestRecord());
         boolean fresh = r.at == null;
+        if (!k.equals(openKey)) {
+            openKey = k;
+            before = new HashMap<>(r.items);
+        }
         r.at = new BotMemory.Pos(pos, bot.dim());
         r.items.clear();
         r.free = 0;
@@ -72,6 +98,9 @@ public final class ChestIndex {
             else r.free++;
         }
         r.seenMillis = System.currentTimeMillis();
+        r.seenTick = bot.level().getGameTime();
+        r.by = null;
+        r.partial = false;
         r.touchedBy = null;
         String block = BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(pos).getBlock()).toString();
         r.lootr = block.startsWith("lootr:");
@@ -151,6 +180,48 @@ public final class ChestIndex {
         var r = bot.memory().chests.get(key(bot.dim(), pos));
         if (r != null) r.free = 0;
         bot.memory().save();
+    }
+
+    /** What a teammate said a team chest holds, as of game time {@code tick}: newer than ours, it's ours now. */
+    public static void heard(Bot bot, String from, BlockPos pos, long tick, int free, Map<String, Integer> items, boolean full) {
+        BotMemory.ChestRecord r = bot.memory().chests.computeIfAbsent(key(bot.dim(), pos), x -> new BotMemory.ChestRecord());
+        if (r.at != null && r.seenTick > tick) return;
+        boolean fresh = r.at == null;
+        r.at = new BotMemory.Pos(pos, bot.dim());
+        if (full) {
+            r.items.clear();
+            r.partial = false;
+        } else if (fresh) {
+            r.partial = true;
+        }
+        items.forEach((id, n) -> {
+            if (n > 0) r.items.put(id, n);
+            else r.items.remove(id);
+        });
+        if (free >= 0) r.free = free;
+        r.seenTick = tick;
+        r.seenMillis = System.currentTimeMillis();
+        r.by = from;
+        // only team chests go on the radio: ours to use as well
+        r.ours = true;
+        r.offLimits = false;
+        if (fresh) bot.event("heard of a chest at " + pos.toShortString() + " from " + from + " (" + items.size() + " kinds" + (full ? "" : ", some") + ")");
+    }
+
+    /** Our record of the chest at {@code pos}, or null. */
+    public static BotMemory.ChestRecord record(Bot bot, BlockPos pos) {
+        BotMemory.ChestRecord r = bot.memory().chests.get(key(bot.dim(), pos));
+        return r == null || r.at == null ? null : r;
+    }
+
+    /** "minecraft:bread" as said on the chat radio: "bread". */
+    public static String shortId(String id) {
+        return id.startsWith("minecraft:") ? id.substring("minecraft:".length()) : id;
+    }
+
+    /** "bread" heard on the chat radio is "minecraft:bread". */
+    public static String fullId(String id) {
+        return id.contains(":") ? id : "minecraft:" + id;
     }
 
     public static boolean takeable(BotMemory.ChestRecord r) {

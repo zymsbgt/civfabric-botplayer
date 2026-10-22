@@ -85,6 +85,12 @@ public final class BotMemory {
         public int free = -1;
         /** Someone else (a player, not one of us) has been into it since we last looked: who. */
         public String touchedBy;
+        /** Level game time it was last seen open: the same clock for every bot, so the newest record wins. */
+        public long seenTick;
+        /** The teammate whose look this record is, heard on the chat radio; null when it's our own. */
+        public String by;
+        /** Only some of its items are known (heard in answers and changes): the rest may be there too. */
+        public boolean partial;
     }
 
     public static final class RosterEntry {

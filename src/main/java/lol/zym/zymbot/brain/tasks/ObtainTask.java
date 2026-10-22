@@ -84,6 +84,11 @@ public class ObtainTask extends Task {
     @Override
     protected Status onTick(Bot bot) {
         if (target.satisfied()) return Status.SUCCESS;
+        // a single item we know of no chest for: a teammate in earshot may (answered over the radio,
+        // in time for the next plan)
+        if (ticks == 1 && target.candidates().size() == 1
+                && lol.zym.zymbot.memory.ChestIndex.find(bot, target.candidates().get(0), 64) == null)
+            lol.zym.zymbot.team.ChestRadio.ask(bot, target.candidates().get(0), target.count() - target.have());
         if (child != null) {
             Status s = runChild(bot);
             if (s == Status.FAILURE) {
