@@ -9,7 +9,11 @@ import net.minecraft.world.item.Items;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -115,14 +119,7 @@ public final class Diet {
         return bot.memory().timesEatenRecently(Inv.id(s.getItem()));
     }
 
-    /**
-     * What the food we carry is really worth: each extra item of a kind counts as one more
-     * repeat, so a stack of one food is worth little and a mix of foods a lot.
-     */
-    /**
-     * Raw meat as the food it will be once cooked. Stock is about what we'll eat, and raw meat
-     * under Spice of Fabric's repeat penalty is worth too little to ever add up to a stock.
-     */
+    /** The cooked food a raw one becomes, or the stack itself. */
     public static ItemStack asEaten(ItemStack s) {
         var cooked = s.is(Items.BEEF) ? Items.COOKED_BEEF : s.is(Items.PORKCHOP) ? Items.COOKED_PORKCHOP
                 : s.is(Items.MUTTON) ? Items.COOKED_MUTTON : s.is(Items.CHICKEN) ? Items.COOKED_CHICKEN
@@ -131,22 +128,116 @@ public final class Diet {
         return cooked == null ? s : new ItemStack(cooked, s.getCount());
     }
 
-    public static double stockValue(Bot bot) {
+    /**
+     * The food ids of this player's last meals, oldest first, as the server counts them (Spice of
+     * Fabric syncs them to the client); our own record when that can't be read.
+     */
+    public static List<String> recentMeals(Bot bot) {
         load();
-        double total = 0;
-        java.util.Map<String, Integer> seen = new java.util.HashMap<>();
-        for (int i = 0; i < 36; i++) {
-            ItemStack s = asEaten(Inv.inv().getItem(i));
-            FoodProperties f = Inv.food(s);
-            if (f == null || Inv.riskyFood(s)) continue;
-            String id = Inv.id(s.getItem());
-            int past = active ? timesEaten(bot, s) : 0;
-            for (int n = 0; n < s.getCount(); n++) {
-                int k = seen.merge(id, 1, Integer::sum) - 1;
-                total += active ? worth(baseHunger(s), Math.min(past + k, history)) : f.nutrition();
+        if (!reflectFailed) {
+            try {
+                if (historyOf == null) {
+                    Class<?> fh = Class.forName("de.siphalor.spiceoffabric.foodhistory.FoodHistory");
+                    historyOf = fh.getMethod("get", net.minecraft.world.entity.player.Player.class);
+                    timesRecently = fh.getMethod("getTimesRecentlyEaten", ItemStack.class);
+                }
+                if (mealCount == null) {
+                    mealCount = historyOf.getDeclaringClass().getMethod("getRecentlyEatenCount");
+                    mealAt = historyOf.getDeclaringClass().getMethod("getStackFromRecentlyEaten", int.class);
+                }
+                Object h = historyOf.invoke(null, bot.player());
+                if (h != null) {
+                    int n = (Integer) mealCount.invoke(h);
+                    List<String> out = new ArrayList<>(n);
+                    // index 0 is the head of Spice of Fabric's queue: the oldest meal
+                    for (int i = 0; i < n; i++) {
+                        Object s = mealAt.invoke(h, i);
+                        if (s instanceof ItemStack st && !st.isEmpty()) out.add(Inv.id(st.getItem()));
+                    }
+                    return out;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                reflectFailed = true;
+                ZymBotMod.LOG.warn("Can't read Spice of Fabric's food history; counting meals ourselves", e);
             }
         }
-        return total;
+        return new ArrayList<>(bot.memory().recent_foods);
+    }
+
+    private static java.lang.reflect.Method mealCount, mealAt;
+
+    /** The planner for a player who ate {@code meals} last (oldest first); food at face value without the mod. */
+    public static MealPlan planner(List<String> meals) {
+        load();
+        return active ? new MealPlan(meals, history, hungerBase) : new MealPlan(List.of(), 0, 1);
+    }
+
+    /**
+     * The ways to eat an item: as it is (unless it does harm, like raw chicken) and as what it cooks
+     * into. Null for anything that isn't a food worth counting.
+     */
+    public static MealPlan.Pile describe(String id) {
+        var rl = net.minecraft.resources.ResourceLocation.tryParse(id.contains(":") ? id : "minecraft:" + id);
+        var item = rl == null ? null : net.minecraft.core.registries.BuiltInRegistries.ITEM.getOptional(rl).orElse(null);
+        if (item == null) return null;
+        ItemStack s = new ItemStack(item);
+        if (Inv.food(s) == null) return null;
+        List<MealPlan.Form> forms = new ArrayList<>();
+        MealPlan.Form now = Inv.riskyFood(s) ? null : new MealPlan.Form(Inv.id(item), baseHunger(s));
+        if (now != null) forms.add(now);
+        ItemStack cooked = asEaten(s);
+        if (cooked.getItem() != item && Inv.food(cooked) != null && !Inv.riskyFood(cooked))
+            forms.add(new MealPlan.Form(Inv.id(cooked.getItem()), baseHunger(cooked)));
+        return forms.isEmpty() ? null : new MealPlan.Pile(Inv.id(item), 1, now, forms);
+    }
+
+    /** The food we carry, id -> count. */
+    public static Map<String, Integer> foodCounts() {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (int i = 0; i < 36; i++) {
+            ItemStack s = Inv.inv().getItem(i);
+            if (Inv.food(s) != null) out.merge(Inv.id(s.getItem()), s.getCount(), Integer::sum);
+        }
+        return out;
+    }
+
+    /** Piles for a pack of ids and counts. */
+    public static List<MealPlan.Pile> piles(Map<String, Integer> counts) {
+        return MealPlan.piles(counts, Diet::describe);
+    }
+
+    private static String cachedFor;
+    private static double cachedValue;
+
+    /**
+     * What the food we carry is really worth: everything eaten in the best order, going round the
+     * foods so repeats cost as little as they can, each raw food eaten raw or cooked, whichever pays.
+     * A stack of one food is worth little and a mix of foods a lot.
+     */
+    public static double stockValue(Bot bot) {
+        Map<String, Integer> counts = foodCounts();
+        List<String> meals = recentMeals(bot);
+        String key = counts + "|" + meals;
+        if (key.equals(cachedFor)) return cachedValue;
+        cachedFor = key;
+        cachedValue = planner(meals).total(piles(counts));
+        return cachedValue;
+    }
+
+    private static String firstFor;
+    private static Map<String, Double> firstPlan;
+
+    /** For each food we carry that's edible as it is: what the pack restores eating it first. */
+    public static Map<String, Double> ifEatenFirst(Bot bot) {
+        // asked every tick while hungry: plan again only when the pack or the meals change
+        Map<String, Integer> counts = foodCounts();
+        List<String> meals = recentMeals(bot);
+        String key = counts + "|" + meals;
+        if (!key.equals(firstFor)) {
+            firstFor = key;
+            firstPlan = planner(meals).ifFirst(piles(counts));
+        }
+        return firstPlan;
     }
 
     /** Different safe foods we carry. */

@@ -131,7 +131,11 @@ public final class Commands {
                                 + " (stack says " + f.nutrition() + ")"
                                 + (Inv.riskyFood(s) ? " (risky)" : ""));
                     }
-                    return "last " + lol.zym.zymbot.inv.Diet.history() + " meals; " + (out.isEmpty() ? "carrying no food" : String.join("; ", out));
+                    var plan = lol.zym.zymbot.inv.Diet.ifEatenFirst(bot);
+                    String next = plan.entrySet().stream().max(Map.Entry.comparingByValue())
+                            .map(e -> "; next meal " + e.getKey().replace("minecraft:", "")).orElse("");
+                    return "last " + lol.zym.zymbot.inv.Diet.history() + " meals; " + (out.isEmpty() ? "carrying no food" : String.join("; ", out))
+                            + "; pack worth " + Math.round(lol.zym.zymbot.inv.Diet.stockValue(bot)) + " eaten in the best order" + next;
                 }
                 case "milestones", "progress" -> {
                     return String.join(", ", bot.brain().progression().status());

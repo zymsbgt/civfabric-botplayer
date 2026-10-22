@@ -14,8 +14,9 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Eat something. Spice of Fabric shrinks the value of foods eaten recently and makes them slower
- * to eat, so the choice favours whatever hasn't been eaten lately, and we keep chewing for as long
- * as the food really takes. Foods with bad side effects only when starving.
+ * to eat, so the choice follows {@link lol.zym.zymbot.inv.MealPlan}: the meal that leaves the pack
+ * worth the most, which goes round the foods we carry. We keep chewing for as long as the food
+ * really takes. Foods with bad side effects only when starving.
  */
 public class EatTask extends Task {
     private int slot = -1;
@@ -67,8 +68,11 @@ public class EatTask extends Task {
         }
         int food = bot.player().getFoodData().getFoodLevel();
         boolean starving = food <= 4;
+        // what the whole pack restores with each food eaten now and the rest in the best order:
+        // going round the foods, and a raw one eaten raw when that pays more than a tired cooked one
+        var plan = Diet.ifEatenFirst(bot);
         int best = -1;
-        double bestScore = 0;
+        double bestScore = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < 36; i++) {
             ItemStack s = Inv.inv().getItem(i);
             FoodProperties f = Inv.food(s);
@@ -87,9 +91,9 @@ public class EatTask extends Task {
             double hunger = Math.min(value, gap);
             double newFood = Math.min(20, food + value);
             double sat = Math.min(f.saturation(), Math.max(0, newFood - bot.player().getFoodData().getSaturationLevel()));
-            double score = (hunger + sat * 0.5 - (value - hunger) * 1.5) / Math.sqrt(Diet.slowdown(bot, s));
-            if (score <= 0) score = 0.01; // still better than nothing when it's all we have
-            if (Inv.riskyFood(s)) score *= 0.2;
+            Double pack = plan.get(id);
+            // a risky food (starving) only after every safe one: it's in no plan
+            double score = pack == null ? -1000 + value : pack + sat * 0.5 - (value - hunger) * 1.5;
             if (score > bestScore) {
                 bestScore = score;
                 best = i;
