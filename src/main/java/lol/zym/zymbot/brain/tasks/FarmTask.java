@@ -73,6 +73,7 @@ public class FarmTask extends Task {
     private int harvested, sown, tilled;
     private String idle = "";
     private int idleTicks;
+    private int shoreAt = -1000;
     private final Set<String> told = new HashSet<>();
 
     public FarmTask(BlockPos center, int range, int minutes) {
@@ -110,6 +111,13 @@ public class FarmTask extends Task {
             jobTicks = 0;
             if (job == null) {
                 Nav.stop();
+                // a job can end with us in the farm's water hole: wait beside it, not in it (Bot1 sank
+                // out of air every few seconds there)
+                if (bot.player().isInWater() && ticks - shoreAt > 200) {
+                    shoreAt = ticks;
+                    setChild(bot, new ShoreTask());
+                    return Status.RUNNING;
+                }
                 idleTicks++;
                 // nothing we hold grows on the empty plots: say so and go (other seeds are the fix), not idle out the shift
                 if (cantSow && idleTicks > 20 * 20) return fail("nothing I hold grows here");
