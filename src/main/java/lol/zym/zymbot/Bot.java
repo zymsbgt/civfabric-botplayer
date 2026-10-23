@@ -1043,7 +1043,10 @@ public final class Bot {
                 LevelChunkSection[] secs = ch.getSections();
                 for (int i = Math.max(0, minSec); i <= Math.min(secs.length - 1, maxSec); i++) {
                     if (secs[i] == null || secs[i].hasOnlyAir()) continue;
+                    // Lithium's count hands over every type in the section's palette, ones with no
+                    // blocks left included: Bot1 kept going back for wild emmer it had picked clean
                     secs[i].getStates().count((state, n) -> {
+                        if (n <= 0) return;
                         if (BlockRules.natural(state)) surveyed.add(state.getBlock());
                         else if (BlockRules.looksBuilt(state)) built[0] += n;
                     });
