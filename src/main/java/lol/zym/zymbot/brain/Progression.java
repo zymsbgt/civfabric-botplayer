@@ -178,6 +178,16 @@ public final class Progression {
         return lol.zym.zymbot.inv.Diet.stockValue(b()) >= 24 && lol.zym.zymbot.inv.Diet.kinds() >= 3;
     }
 
+    /** We're fed, and so is every teammate in radio range (their status lines say "fs=1"). */
+    public static boolean teamFoodSecure(Bot bot) {
+        if (!foodSecure(bot)) return false;
+        for (var m : bot.team().inRange()) {
+            var fs = m.state().get("food_secure");
+            if (fs == null || !fs.getAsBoolean()) return false;
+        }
+        return true;
+    }
+
     /** A farm feeds the team (ours or a teammate's) and we're carrying enough to eat meanwhile. */
     public static boolean foodSecure(Bot bot) {
         return teamFarm(bot) >= FARM_PLOTS && (stocked() || bot.player().getFoodData().getFoodLevel() >= 14);
@@ -654,7 +664,7 @@ public final class Progression {
         gateCheckedAt.put(m.id(), now);
         Wait w = null;
         for (var e : m.wants().entrySet()) {
-            if (Inv.count(e.getKey()) >= e.getValue()) continue;
+            if (Inv.count(s -> s.is(e.getKey()) && !ToolShare.worn(s)) >= e.getValue()) continue;
             String why = b().planner().gate(e.getKey());
             if (why != null) {
                 w = new Wait(m, e.getKey(), e.getValue(), why);
@@ -669,7 +679,12 @@ public final class Progression {
 
     /** Why a milestone isn't to be started yet, or null: levelling classes waits for the farm. */
     private static String deferred(Milestone m) {
-        return m.id().startsWith("level_") && !foodSecure(b()) ? "until food is secure" : null;
+        if (m.id().startsWith("level_") && !foodSecure(b())) return "until food is secure";
+        for (Item it : m.wants().keySet()) {
+            String why = ToolShare.pickaxesFirst(b(), it);
+            if (why != null) return why;
+        }
+        return null;
     }
 
     /** Milestones that became gated since the last call: each wants one board post. */

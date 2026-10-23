@@ -96,8 +96,13 @@ public final class Planner {
     }
 
     private String gate(Item item, int depth, Set<Item> seen) {
-        if (depth > 3 || !seen.add(item) || Inv.has(item) || cost(item) < INF) return null;
+        if (depth > 3 || !seen.add(item)) return null;
+        // a worn-out tool is one to replace, not one we have
+        if (lol.zym.zymbot.brain.ToolShare.isTool(item) ? lol.zym.zymbot.brain.ToolShare.hasFresh(item) : Inv.has(item)) return null;
         String itemId = Inv.id(item), name = itemId.replace("minecraft:", "");
+        String smith = lol.zym.zymbot.brain.ToolShare.smithMakes(bot, item);
+        if (smith != null) return smith + " to make " + name;
+        if (cost(item) < INF) return null;
         var civ = bot.civ();
         var recipes = Recipes.craftingFor(item);
         if (!recipes.isEmpty()) {
@@ -184,7 +189,10 @@ public final class Planner {
                 if (c < INF) options.add(new Method(Kind.HUNT, c, item, null, mobs, null, null));
             }
 
+            // tools are the Blacksmith's to make once the team is fed (ToolShare): we ask, not craft
+            boolean smiths = lol.zym.zymbot.brain.ToolShare.smithMakes(bot, item) != null;
             for (RecipeHolder<CraftingRecipe> h : Recipes.craftingFor(item)) {
+                if (smiths) break;
                 if (!bot.civ().canCraft(bot.memory(), h.id().toString()) || !bot.civ().canCraft(bot.memory(), itemId)) continue;
                 int out = Math.max(1, Recipes.result(h).getCount());
                 // on a tie, vanilla recipes (oak log to planks) over modded ones (Vinery's apple wood)

@@ -62,6 +62,9 @@ public final class Brain {
     private int idleCooldown;
     private long nextBoardCheck;
     private boolean claimPending;
+    /** Asks that found no board in range: posted once one is up. */
+    private final List<ItemTarget> unposted = new java.util.ArrayList<>();
+    private long boardMadeAt;
     /** Posts we recently failed at, so we don't claim them straight back: post id -> retry time. */
     private final java.util.Map<String, Long> skipPosts = new java.util.HashMap<>();
 
@@ -274,7 +277,13 @@ public final class Brain {
 
         for (Progression.Wait w : progression.newWaits()) {
             bot.event(w.milestone().id() + " needs " + w.why() + ": waiting for the rank or a teammate");
-            askBoard(bot, ItemTarget.of(w.item(), w.count()));
+            Item ask = ToolShare.smithMakes(bot, w.item()) != null ? ToolShare.askFor(w.item()) : w.item();
+            askBoard(bot, ItemTarget.of(ask, w.count()));
+        }
+        if (!unposted.isEmpty() && !bot.team().boards().isEmpty()) {
+            List<ItemTarget> again = new java.util.ArrayList<>(unposted);
+            unposted.clear();
+            again.forEach(t -> askBoard(bot, t));
         }
         if (progress == null) {
             milestone = progression.next();
@@ -297,7 +306,12 @@ public final class Brain {
                     int streak = failStreak.merge(milestone.id(), 1, Integer::sum);
                     if (streak >= 3) bot.askForHelp("can't finish " + milestone.id() + " (" + streak + " tries): " + progress.failureReason());
                     progression.snooze(milestone.id(), 10 * 60_000L);
-                    if (progress instanceof ObtainTask o) askBoard(bot, o.target());
+                    if (progress instanceof ObtainTask o) {
+                        // a tool the Blacksmith makes: ask for its stone version, as the gate would have
+                        Item it = o.target().candidates().isEmpty() ? null : o.target().candidates().get(0);
+                        askBoard(bot, it != null && ToolShare.smithMakes(bot, it) != null
+                                ? ItemTarget.of(ToolShare.askFor(it), 1) : o.target());
+                    }
                 } else if (milestone.done().getAsBoolean()) {
                     failStreak.remove(milestone.id());
                     bot.event("milestone " + milestone.id() + " done");
@@ -359,6 +373,8 @@ public final class Brain {
                 ItemTarget item = ItemTarget.parse(post.get("item").getAsString(), 1);
                 if (item == null) continue;
                 Item it = item.candidates().get(0);
+                // short of iron or diamond: a teammate's sword waits while a pickaxe is wanted
+                if (ToolShare.pickaxesFirst(bot, it) != null) continue;
                 Set<Item> chain = BoardJobTask.chainOf(post);
                 if (chain.contains(it)) continue;
                 boolean doable = bot.planner().cost(it) < 400
@@ -397,7 +413,26 @@ public final class Brain {
 
     /** Stuck on something (often a CivFabric class gate): ask teammates via the nearest board. */
     private void askBoard(Bot bot, ItemTarget want) {
-        if (!BotConfig.get().postRequests || bot.team().boards().isEmpty() || want.candidates().isEmpty()) return;
+        if (!BotConfig.get().postRequests || want.candidates().isEmpty()) return;
+        if (bot.team().boards().isEmpty()) {
+            // nowhere to ask: put a board up at the base, and post once the hub lists it. A world
+            // without one never heard Bot1's asks for stone tools at all
+            if (unposted.stream().noneMatch(t -> t.candidates().get(0) == want.candidates().get(0))) unposted.add(want);
+            net.minecraft.core.BlockPos base = ClassPlan.teamHome(bot);
+            long now = System.currentTimeMillis();
+            if (base != null && base.closerThan(bot.player().blockPosition(), 16) && now - boardMadeAt > 10 * 60_000L) {
+                boardMadeAt = now;
+                JsonObject op = new JsonObject();
+                op.addProperty("op", "create");
+                op.addProperty("name", (bot.memory().homeName != null ? bot.memory().homeName : bot.name()) + "-board");
+                JsonObject chest = Commands.nearestChest(bot);
+                if (chest != null) op.add("chest", chest);
+                bot.team().boardOp(op, r -> {
+                    if (r.get("ok").getAsBoolean()) bot.event("put up a job board at the base, to ask for " + want);
+                });
+            }
+            return;
+        }
         // a craft that failed because we were too hungry isn't something to ask the team for
         if (bot.civ().present() && bot.player().getFoodData().getFoodLevel() <= 4) return;
         JsonObject board = bot.team().boards().get(0);

@@ -757,7 +757,7 @@ public final class Commands {
         return null;
     }
 
-    private static JsonObject nearestChest(Bot bot) {
+    static JsonObject nearestChest(Bot bot) {
         BlockPos me = bot.player().blockPosition();
         BlockPos best = null;
         for (BlockPos p : BlockPos.betweenClosed(me.offset(-5, -2, -5), me.offset(5, 2, 5))) {
