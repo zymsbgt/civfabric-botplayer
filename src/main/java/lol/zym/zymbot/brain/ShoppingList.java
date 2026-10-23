@@ -150,7 +150,7 @@ public final class ShoppingList {
             BlockState st = WorldView.state(p);
             // wild crops aren't "terrain", but they're nobody's
             if (!BlockRules.natural(st) && !byBlock.get(st.getBlock()).what().equals("new seeds")) continue;
-            if (!WorldView.exposed(p) || !Inv.canHarvest(st)) continue;
+            if (!WorldView.exposed(p) || touchesWater(p) || !Inv.canHarvest(st)) continue;
             if (!bot.civ().canMine(bot.memory(), BuiltInRegistries.BLOCK.getKey(st.getBlock()).toString())) continue;
             // the costly checks last, and only for the nearest few
             if (++checked > 6) break;
@@ -158,5 +158,15 @@ public final class ShoppingList {
             return new Find(byBlock.get(st.getBlock()), st.getBlock(), p);
         }
         return null;
+    }
+
+    /**
+     * A block with water beside or above it: mined swimming, 5x slower, and a bot that dived for a
+     * river bed's cobblestone (Bot2) couldn't climb back out. Not worth a detour.
+     */
+    private static boolean touchesWater(BlockPos p) {
+        for (var d : net.minecraft.core.Direction.values())
+            if (d != net.minecraft.core.Direction.DOWN && WorldView.water(p.relative(d))) return true;
+        return false;
     }
 }
