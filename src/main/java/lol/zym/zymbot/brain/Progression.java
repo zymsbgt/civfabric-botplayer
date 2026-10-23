@@ -45,7 +45,8 @@ public final class Progression {
         // a sword before any long walk (rejoining the team, a grave): a spider pack killed an unarmed bot
         // in seconds, and a Pokémon that fights back has to be finished. Worth the 3 food it costs (a
         // pickaxe doesn't count, though it hits a little harder than a fist)
-        add("wooden_sword", Inv::armed, b -> obtain(Items.WOODEN_SWORD, 1), Map.of(Items.WOODEN_SWORD, 1));
+        add("wooden_sword", () -> fresh(s -> s.getItem() instanceof SwordItem || s.getItem() instanceof AxeItem, 0),
+                b -> another(stoneOr(b, Items.STONE_SWORD, Items.WOODEN_SWORD, 2)), Map.of(Items.WOODEN_SWORD, 1));
         // stay with the team: a bot that wandered (or respawned) far from the base walks back first
         add("rejoin", () -> {
             BlockPos t = ClassPlan.teamHome(b());
@@ -53,7 +54,8 @@ public final class Progression {
         }, b -> new GoToTask(ClassPlan.teamHome(b), 12));
         // Spice of Fabric: a stack of one food is worth little, so "enough" means value and variety
         add("food_stock", Progression::stocked, Progression::food);
-        add("wooden_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 0, b -> obtain(Items.WOODEN_PICKAXE, 1), Map.of(Items.WOODEN_PICKAXE, 1));
+        add("wooden_pickaxe", () -> fresh(PickaxeItem.class, 0), b -> another(stoneOr(b, Items.STONE_PICKAXE, Items.WOODEN_PICKAXE, 3)),
+                Map.of(Items.WOODEN_PICKAXE, 1));
         // free to craft while classless (as are chests, torches and sticks): before the first rank
         add("furnace", () -> Inv.has(Items.FURNACE), b -> obtain(Items.FURNACE, 1), Map.of(Items.FURNACE, 1));
         // food stock counts raw meat at its cooked worth, so cook it as soon as there's a furnace
@@ -61,7 +63,8 @@ public final class Progression {
 
         // ---- phase 2: a farm. The Grower makes it; everyone else sends it their seeds -------
         // the Grower always carries a hoe: CivFabric destroys any crop harvested without one
-        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1), Map.of(Items.WOODEN_HOE, 1));
+        add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || fresh(HoeItem.class, 0), b -> another(stoneOr(b, Items.STONE_HOE, Items.WOODEN_HOE, 2)),
+                Map.of(Items.WOODEN_HOE, 1));
         // seed for 3 crops that grow at the base: Realistic Plant Growth won't put the same crop back
         // in the same soil for days, so a one-crop farm empties itself. And one that grows in each biome
         // the land we could farm reaches into (see bareBiome)
@@ -90,8 +93,8 @@ public final class Progression {
 
         // ---- phase 3: classes, each bot in its role's, with gear as ranks unlock it ---------
         add("level_apprentice", () -> levelled(1), b -> level(b));
-        add("stone_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 1, b -> obtain(Items.STONE_PICKAXE, 1), Map.of(Items.STONE_PICKAXE, 1));
-        add("stone_sword", () -> Inv.bestTier(SwordItem.class) >= 1, b -> obtain(Items.STONE_SWORD, 1), Map.of(Items.STONE_SWORD, 1));
+        add("stone_pickaxe", () -> fresh(PickaxeItem.class, 1), b -> another(Items.STONE_PICKAXE), Map.of(Items.STONE_PICKAXE, 1));
+        add("stone_sword", () -> fresh(SwordItem.class, 1), b -> another(Items.STONE_SWORD), Map.of(Items.STONE_SWORD, 1));
         // a full set of leather (7 armour): what a bot can take on rises from what its sword is worth.
         // Each piece is done once its slot holds any armour; Bot.equipArmor puts on what we carry
         add("leather_helmet", () -> armoured(net.minecraft.world.entity.EquipmentSlot.HEAD, Items.LEATHER_HELMET),
@@ -102,16 +105,16 @@ public final class Progression {
                 b -> obtain(Items.LEATHER_LEGGINGS, 1), Map.of(Items.LEATHER_LEGGINGS, 1));
         add("leather_boots", () -> armoured(net.minecraft.world.entity.EquipmentSlot.FEET, Items.LEATHER_BOOTS),
                 b -> obtain(Items.LEATHER_BOOTS, 1), Map.of(Items.LEATHER_BOOTS, 1));
-        add("stone_axe", () -> Inv.bestTier(AxeItem.class) >= 1, b -> obtain(Items.STONE_AXE, 1), Map.of(Items.STONE_AXE, 1));
-        add("stone_shovel", () -> Inv.bestTier(ShovelItem.class) >= 1, b -> obtain(Items.STONE_SHOVEL, 1), Map.of(Items.STONE_SHOVEL, 1));
+        add("stone_axe", () -> fresh(AxeItem.class, 1), b -> another(Items.STONE_AXE), Map.of(Items.STONE_AXE, 1));
+        add("stone_shovel", () -> fresh(ShovelItem.class, 1), b -> another(Items.STONE_SHOVEL), Map.of(Items.STONE_SHOVEL, 1));
         add("coal", () -> Inv.count(s -> s.is(Items.COAL) || s.is(Items.CHARCOAL)) >= 8 || Inv.count(Items.TORCH) >= 16,
                 b -> new ObtainTask(new ItemTarget("coal", s -> s.is(Items.COAL) || s.is(Items.CHARCOAL), List.of(Items.COAL, Items.CHARCOAL), 8)),
                 Map.of(Items.COAL, 8));
         add("torches", () -> Inv.count(Items.TORCH) >= 16, b -> obtain(Items.TORCH, 16), Map.of(Items.TORCH, 16));
         add("level_journeyman", () -> levelled(2), b -> level(b));
-        add("iron_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 2, b -> obtain(Items.IRON_PICKAXE, 1), Map.of(Items.IRON_PICKAXE, 1));
+        add("iron_pickaxe", () -> fresh(PickaxeItem.class, 2), b -> another(Items.IRON_PICKAXE), Map.of(Items.IRON_PICKAXE, 1));
         add("shield", () -> Inv.has(Items.SHIELD), b -> obtain(Items.SHIELD, 1), Map.of(Items.SHIELD, 1));
-        add("iron_sword", () -> Inv.bestTier(SwordItem.class) >= 2, b -> obtain(Items.IRON_SWORD, 1), Map.of(Items.IRON_SWORD, 1));
+        add("iron_sword", () -> fresh(SwordItem.class, 2), b -> another(Items.IRON_SWORD), Map.of(Items.IRON_SWORD, 1));
         add("level_expert", () -> levelled(3), b -> level(b));
         add("iron_chestplate", () -> wearingOrHas(Items.IRON_CHESTPLATE, Items.DIAMOND_CHESTPLATE), b -> obtain(Items.IRON_CHESTPLATE, 1), Map.of(Items.IRON_CHESTPLATE, 1));
         add("iron_helmet", () -> wearingOrHas(Items.IRON_HELMET, Items.DIAMOND_HELMET), b -> obtain(Items.IRON_HELMET, 1), Map.of(Items.IRON_HELMET, 1));
@@ -513,8 +516,41 @@ public final class Progression {
         ladder.add(new Milestone(id, done, make, wants));
     }
 
+    /** One more than we carry: replacing a worn tool with a fresh copy of the same one. */
+    private static Task another(Item item) {
+        return obtain(item, Inv.count(item) + 1);
+    }
+
     private static Task obtain(Item item, int n) {
         return new ObtainTask(ItemTarget.of(item, n));
+    }
+
+    /**
+     * A tool of this kind and at least this tier with use left in it. One worn down to its last 15%
+     * doesn't count, so the next is made while the old one still works: Bot2's wooden swords broke
+     * mid-hunt twice in a day, leaving it unarmed till the goal came round again.
+     */
+    private static boolean fresh(java.util.function.Predicate<ItemStack> kind, int tier) {
+        for (int i = 0; i < 36; i++) {
+            ItemStack s = Inv.inv().getItem(i);
+            if (!kind.test(s) || Inv.tier(s) < tier) continue;
+            if (!ToolShare.worn(s)) return true;
+        }
+        return false;
+    }
+
+    private static boolean fresh(Class<? extends Item> kind, int tier) {
+        return fresh(s -> kind.isInstance(s.getItem()), tier);
+    }
+
+    /**
+     * The stone tool where we may craft it (Apprentice Blacksmith) and have the stone for it, or a
+     * pickaxe to mine some: it lasts twice as long as the wooden one and hits harder.
+     */
+    private static Item stoneOr(Bot bot, Item stone, Item wood, int stoneNeeded) {
+        if (!bot.civ().canCraft(bot.memory(), Inv.id(stone))) return wood;
+        int have = Inv.count(s -> s.is(ItemTags.STONE_TOOL_MATERIALS));
+        return have >= stoneNeeded || Inv.bestTier(PickaxeItem.class) >= 0 ? stone : wood;
     }
 
     /** Some armour in this slot already, or the piece in our bag waiting to go on. */
