@@ -88,10 +88,14 @@ public class SettleTask extends Task {
         return Status.RUNNING;
     }
 
-    /** A bed fits two blocks ahead of {@code feet}: two replaceable blocks on floor, with room above. */
+    /**
+     * A bed fits two blocks ahead of {@code feet}: two replaceable blocks on floor, with room above.
+     * Not water, which is replaceable too: Bot1 put its bed in the farm's pond.
+     */
     private static boolean bedFits(BlockPos feet, Direction d) {
         BlockPos a = feet.relative(d, 2), b = a.relative(d);
         return WorldView.state(a).canBeReplaced() && WorldView.state(b).canBeReplaced()
+                && !WorldView.water(a) && !WorldView.water(b)
                 && WorldView.floor(a.below()) && WorldView.floor(b.below())
                 && WorldView.passable(a.above()) && WorldView.passable(b.above());
     }
