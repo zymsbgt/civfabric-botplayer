@@ -63,8 +63,9 @@ public final class Progression {
         // the Grower always carries a hoe: CivFabric destroys any crop harvested without one
         add("wooden_hoe", () -> !ClassPlan.isGrower(b()) || Inv.bestTier(HoeItem.class) >= 0, b -> obtain(Items.WOODEN_HOE, 1), Map.of(Items.WOODEN_HOE, 1));
         // seed for 3 crops that grow at the base: Realistic Plant Growth won't put the same crop back
-        // in the same soil for days, so a one-crop farm empties itself
-        add("seeds", () -> !ClassPlan.isGrower(b()) || seedKinds() >= 3 && seedCount() >= 12, Progression::seeds);
+        // in the same soil for days, so a one-crop farm empties itself. And one that grows in each biome
+        // the land we could farm reaches into (see bareBiome)
+        add("seeds", () -> !ClassPlan.isGrower(b()) || seedKinds() >= 3 && seedCount() >= 12 && bareBiome(b()) == null, Progression::seeds);
         add("farm", () -> !ClassPlan.isGrower(b()) || farmPlots(b()) >= FARM_PLOTS, b -> new LayFieldTask());
         add("share_seeds", () -> ClassPlan.isGrower(b()) || seedCount() == 0 || grower(b()) == null || teamFarm(b()) >= FARM_PLOTS,
                 b -> new GiveTask(grower(b), new ItemTarget("seeds", Progression::plantable, List.of(), seedCount())));
@@ -234,15 +235,96 @@ public final class Progression {
         return k.size();
     }
 
-    /** Realistic Plant Growth lets this crop grow at our base (or here, without one). */
+    /**
+     * Realistic Plant Growth lets this crop grow at our base (or here, without one). While part of
+     * the land we could farm has no seed of ours that grows there, it's that part's climate that
+     * counts: the seeds still wanted are seeds for it.
+     */
     static boolean growsAtBase(Bot bot, net.minecraft.world.level.block.Block crop) {
         if (!lol.zym.zymbot.farm.PlantRules.active()) return true;
         var pr = lol.zym.zymbot.farm.PlantRules.get();
+        BlockPos bare = bareBiome(bot);
+        if (bare != null) return pr.governs(crop) && pr.judgeClimate(crop, bare).grows();
         if (!pr.governs(crop)) return true;
         BlockPos at = ClassPlan.teamHome(bot);
         if (at == null) at = bot.player().blockPosition();
         // the climate there: the base itself may be under trees or a roof, the field won't be
         return pr.judgeClimate(crop, at.above()).grows();
+    }
+
+    /** Plots a biome needs before its seeds are worth a hunt: not for a corner of the field over the line. */
+    private static final int BIOME_PLOTS = 4;
+    private static List<BlockPos> field = List.of();
+    private static long fieldAt;
+
+    /**
+     * Land we could farm around our home, one spot per biome it lies in, the biome with the most
+     * plots first (rechecked every 30 s while the home is in sight). A plot is what a field gets laid
+     * on: farmland, grass or dirt with water within 4 blocks at its level or one above (so farmland
+     * there stays wet), open to the sky. Bot1's home was in forest a few blocks from savanna: its
+     * forest seeds passed, and the plots over the line took none of them.
+     */
+    static List<BlockPos> fieldBiomes(Bot bot) {
+        var home = bot.memory().home;
+        if (home == null || !home.dim.equals(bot.dim())) return List.of();
+        long now = System.currentTimeMillis();
+        BlockPos h = home.pos();
+        if (now - fieldAt < 30_000 || !lol.zym.zymbot.world.WorldView.loaded(h)) return field;
+        fieldAt = now;
+        int r = 10;
+        java.util.Set<BlockPos> water = new java.util.HashSet<>();
+        for (BlockPos p : BlockPos.betweenClosed(h.offset(-r - 4, -3, -r - 4), h.offset(r + 4, 4, r + 4)))
+            if (lol.zym.zymbot.world.WorldView.water(p)) water.add(p.immutable());
+        Map<net.minecraft.resources.ResourceLocation, int[]> count = new HashMap<>();
+        Map<net.minecraft.resources.ResourceLocation, BlockPos> spot = new HashMap<>();
+        for (BlockPos p : BlockPos.betweenClosed(h.offset(-r, -3, -r), h.offset(r, 3, r))) {
+            var s = lol.zym.zymbot.world.WorldView.state(p);
+            if (!(s.is(net.minecraft.world.level.block.Blocks.FARMLAND) || s.is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK)
+                    || s.is(net.minecraft.world.level.block.Blocks.DIRT) || s.is(net.minecraft.world.level.block.Blocks.COARSE_DIRT))) continue;
+            BlockPos above = p.above();
+            var a = lol.zym.zymbot.world.WorldView.state(above);
+            if (!(a.isAir() || a.canBeReplaced()) || lol.zym.zymbot.world.WorldView.water(above) || !bot.level().canSeeSky(above)) continue;
+            if (!wet(water, p)) continue;
+            var biome = lol.zym.zymbot.farm.PlantRules.biomeAt(above);
+            if (biome == null) continue;
+            count.computeIfAbsent(biome, k -> new int[1])[0]++;
+            spot.putIfAbsent(biome, above.immutable());
+        }
+        List<net.minecraft.resources.ResourceLocation> biomes = new ArrayList<>(count.keySet());
+        biomes.removeIf(b -> count.get(b)[0] < BIOME_PLOTS);
+        biomes.sort(java.util.Comparator.comparingInt(b -> -count.get(b)[0]));
+        List<BlockPos> out = new ArrayList<>();
+        for (var b : biomes) out.add(spot.get(b));
+        return field = out;
+    }
+
+    private static boolean wet(java.util.Set<BlockPos> water, BlockPos soil) {
+        for (int dy = 0; dy <= 1; dy++)
+            for (int dx = -4; dx <= 4; dx++)
+                for (int dz = -4; dz <= 4; dz++)
+                    if (water.contains(soil.offset(dx, dy, dz))) return true;
+        return false;
+    }
+
+    /**
+     * A spot in a biome of the land we could farm where none of our seeds grows, or null. Only
+     * crops the plant rules know count: one they don't (Cobblemon's medicinal leek) has needs of
+     * its own, and the field couldn't take Bot1's.
+     */
+    static BlockPos bareBiome(Bot bot) {
+        if (!lol.zym.zymbot.farm.PlantRules.active()) return null;
+        var pr = lol.zym.zymbot.farm.PlantRules.get();
+        for (BlockPos at : fieldBiomes(bot)) {
+            boolean grows = false;
+            for (int i = 0; i < 36 && !grows; i++) {
+                ItemStack st = Inv.inv().getItem(i);
+                if (!plantable(st)) continue;
+                var crop = ((BlockItem) st.getItem()).getBlock();
+                grows = pr.governs(crop) && pr.judgeClimate(crop, at).grows();
+            }
+            if (!grows) return at;
+        }
+        return null;
     }
 
     /**
@@ -263,12 +345,15 @@ public final class Progression {
         return wild;
     }
 
-    /** Seeds are still wanted: fewer than three kinds, or too few to sow. */
+    /** Seeds are still wanted: fewer than three kinds, too few to sow, or none for part of the field. */
     public static boolean wantSeeds(Bot bot) {
-        return ClassPlan.isGrower(bot) && (seedKinds() < 3 || seedCount() < 12);
+        return ClassPlan.isGrower(bot) && (seedKinds() < 3 || seedCount() < 12 || bareBiome(bot) != null);
     }
 
     private static Task seeds(Bot bot) {
+        BlockPos bare = bareBiome(bot);
+        if (bare != null) bot.event("none of my seeds grows in the " + lol.zym.zymbot.farm.PlantRules.biomeAt(bare).getPath()
+                + " part of the field (" + bare.toShortString() + "): looking for one that does");
         // Farm & Charm makes seeds of crops we carry as food (1 lettuce: 3 seeds): no hunt needed
         Item crafted = seedFromCrop(bot);
         if (crafted != null) return new ObtainTask(ItemTarget.of(crafted, 6)).makeIt();
