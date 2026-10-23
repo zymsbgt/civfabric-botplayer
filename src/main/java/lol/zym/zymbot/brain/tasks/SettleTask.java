@@ -62,7 +62,7 @@ public class SettleTask extends Task {
             setChild(bot, new GoToTask(team, 8));
             return Status.RUNNING;
         }
-        BlockPos feet = bot.player().blockPosition();
+        BlockPos feet = feet(bot);
         for (Direction d : Direction.Plane.HORIZONTAL) {
             BlockPos a = feet.relative(d, 2), b = a.relative(d);
             if (bedFits(feet, d)) {
@@ -79,7 +79,12 @@ public class SettleTask extends Task {
             BlockPos spot = spot(bot, team != null ? team : feet);
             if (spot != null) {
                 tried.add(spot);
-                setChild(bot, new GoToTask(spot, 0));
+                setChild(bot, new GoToTask(spot, 0) {
+                    @Override
+                    protected Status onTick(Bot b) {
+                        return feet(b).equals(spot) ? Status.SUCCESS : super.onTick(b);
+                    }
+                });
                 return Status.RUNNING;
             }
         }
@@ -89,13 +94,26 @@ public class SettleTask extends Task {
     }
 
     /**
+     * The block our feet are in, as Baritone counts it: stood on farmland (15/16 tall) or a path,
+     * the player's own block position is the farmland, one below where we stand. Bot1 walked to a
+     * spot on the field and never arrived, looking for room for a bed a block too low.
+     */
+    private static BlockPos feet(Bot bot) {
+        var p = bot.player();
+        return BlockPos.containing(p.getX(), p.getY() + 0.1251, p.getZ());
+    }
+
+    /**
      * A bed fits two blocks ahead of {@code feet}: two replaceable blocks on floor, with room above.
-     * Not water, which is replaceable too: Bot1 put its bed in the farm's pond.
+     * Not water, which is replaceable too: Bot1 put its bed in the farm's pond. Not on the field
+     * either (farmland, or a crop on it).
      */
     private static boolean bedFits(BlockPos feet, Direction d) {
         BlockPos a = feet.relative(d, 2), b = a.relative(d);
         return WorldView.state(a).canBeReplaced() && WorldView.state(b).canBeReplaced()
                 && !WorldView.water(a) && !WorldView.water(b)
+                && !WorldView.state(a.below()).is(net.minecraft.world.level.block.Blocks.FARMLAND)
+                && !WorldView.state(b.below()).is(net.minecraft.world.level.block.Blocks.FARMLAND)
                 && WorldView.floor(a.below()) && WorldView.floor(b.below())
                 && WorldView.passable(a.above()) && WorldView.passable(b.above());
     }
