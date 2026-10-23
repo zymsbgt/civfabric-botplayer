@@ -49,7 +49,7 @@ public final class FightOdds {
         return armor * 3.6 / 20.0 + (armed ? Inv.attackDamage(weapon) * 0.4 + (shield ? 3 : 0) : 0);
     }
 
-    static double ourKit(Bot bot) {
+    public static double ourKit(Bot bot) {
         var p = bot.player();
         int w = Inv.bestWeapon();
         ItemStack weapon = w >= 0 ? p.getInventory().getItem(w) : ItemStack.EMPTY;

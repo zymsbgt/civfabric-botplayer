@@ -92,6 +92,16 @@ public final class Progression {
         add("level_apprentice", () -> levelled(1), b -> level(b));
         add("stone_pickaxe", () -> Inv.bestTier(PickaxeItem.class) >= 1, b -> obtain(Items.STONE_PICKAXE, 1), Map.of(Items.STONE_PICKAXE, 1));
         add("stone_sword", () -> Inv.bestTier(SwordItem.class) >= 1, b -> obtain(Items.STONE_SWORD, 1), Map.of(Items.STONE_SWORD, 1));
+        // a full set of leather (7 armour): what a bot can take on rises from what its sword is worth.
+        // Each piece is done once its slot holds any armour; Bot.equipArmor puts on what we carry
+        add("leather_helmet", () -> armoured(net.minecraft.world.entity.EquipmentSlot.HEAD, Items.LEATHER_HELMET),
+                b -> obtain(Items.LEATHER_HELMET, 1), Map.of(Items.LEATHER_HELMET, 1));
+        add("leather_chestplate", () -> armoured(net.minecraft.world.entity.EquipmentSlot.CHEST, Items.LEATHER_CHESTPLATE),
+                b -> obtain(Items.LEATHER_CHESTPLATE, 1), Map.of(Items.LEATHER_CHESTPLATE, 1));
+        add("leather_leggings", () -> armoured(net.minecraft.world.entity.EquipmentSlot.LEGS, Items.LEATHER_LEGGINGS),
+                b -> obtain(Items.LEATHER_LEGGINGS, 1), Map.of(Items.LEATHER_LEGGINGS, 1));
+        add("leather_boots", () -> armoured(net.minecraft.world.entity.EquipmentSlot.FEET, Items.LEATHER_BOOTS),
+                b -> obtain(Items.LEATHER_BOOTS, 1), Map.of(Items.LEATHER_BOOTS, 1));
         add("stone_axe", () -> Inv.bestTier(AxeItem.class) >= 1, b -> obtain(Items.STONE_AXE, 1), Map.of(Items.STONE_AXE, 1));
         add("stone_shovel", () -> Inv.bestTier(ShovelItem.class) >= 1, b -> obtain(Items.STONE_SHOVEL, 1), Map.of(Items.STONE_SHOVEL, 1));
         add("coal", () -> Inv.count(s -> s.is(Items.COAL) || s.is(Items.CHARCOAL)) >= 8 || Inv.count(Items.TORCH) >= 16,
@@ -495,6 +505,11 @@ public final class Progression {
 
     private static Task obtain(Item item, int n) {
         return new ObtainTask(ItemTarget.of(item, n));
+    }
+
+    /** Some armour in this slot already, or the piece in our bag waiting to go on. */
+    private static boolean armoured(net.minecraft.world.entity.EquipmentSlot slot, Item piece) {
+        return b().player().getItemBySlot(slot).getItem() instanceof ArmorItem || Inv.has(piece);
     }
 
     private static boolean wearingOrHas(Item... items) {

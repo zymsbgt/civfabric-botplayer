@@ -1092,6 +1092,9 @@ public final class Bot {
         pos.addProperty("z", Math.round(p.getZ() * 10) / 10.0);
         o.add("pos", pos);
         o.addProperty("health", p.getHealth());
+        // what we'd take on alone: FightOdds fights when this, rounded up, covers the mobs' danger
+        o.addProperty("fight_kit", Math.round(lol.zym.zymbot.brain.FightOdds.ourKit(this) * 100) / 100.0);
+        o.addProperty("armor_points", p.getArmorValue());
         o.addProperty("food", p.getFoodData().getFoodLevel());
         o.addProperty("downed", downedSince != null);
         o.addProperty("time_of_day", level().getDayTime() % 24000);
