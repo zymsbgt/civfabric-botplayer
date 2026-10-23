@@ -175,17 +175,21 @@ public class ObtainTask extends Task {
         int haveIn = Inv.count(in::test);
         if (haveIn < missing) return sub(ItemTarget.of(in, missing));
         if (!Inv.has(Items.FURNACE) && !bot.hasStationNearby("furnace")) return sub(ItemTarget.of(Items.FURNACE, 1));
-        ItemTarget fuel = fuelFor(bot, in, missing);
+        ItemTarget fuel = fuelFor(bot, in, Recipes.result(recipe).getItem(), missing);
         if (fuel != null) return sub(fuel);
         return new SmeltTask(recipe, missing);
     }
 
-    /** What to fetch to smelt {@code n} items, or null if the fuel we carry will do. */
-    public static ItemTarget fuelFor(Bot bot, Ingredient in, int n) {
+    /**
+     * What to fetch to smelt {@code n} items into {@code out}, or null if the fuel we carry will do.
+     * Never what's being made: Bot2 burned the charcoal it was making for Blacksmith XP, made 3 of 4
+     * and gave the goal up, with a hundred charcoal "in hand" as fuel.
+     */
+    public static ItemTarget fuelFor(Bot bot, Ingredient in, Item out, int n) {
         int fuelTicks = 0;
         for (int i = 0; i < 36; i++) {
             var s = Inv.inv().getItem(i);
-            if (SmeltTask.isPlainFuel(s) && !in.test(s)) {
+            if (SmeltTask.isPlainFuel(s) && !in.test(s) && !s.is(out)) {
                 fuelTicks += AbstractFurnaceBlockEntity.getFuel().getOrDefault(s.getItem(), 0) * s.getCount();
             }
         }

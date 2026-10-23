@@ -65,7 +65,7 @@ public class SmeltTask extends Task {
         // cooking and levelling start us here directly: bring fuel along before finding we have none
         if (!fuelChecked) {
             fuelChecked = true;
-            ItemTarget fuel = ObtainTask.fuelFor(bot, input, count - made());
+            ItemTarget fuel = ObtainTask.fuelFor(bot, input, output, count - made());
             if (fuel != null) {
                 setChild(bot, new ObtainTask(fuel));
                 return Status.RUNNING;
@@ -127,8 +127,9 @@ public class SmeltTask extends Task {
                 }
                 int fuelNeeded = (count - made()) * 200 - fuelTicks(m.getSlot(1).getItem());
                 if (fuelNeeded > 0 && m.getSlot(1).getItem().getCount() < 64) {
-                    // fuel first, then wood we can spare: a second crafting table, a worse wooden tool
-                    int src = Inv.find(s -> isPlainFuel(s) && !input.test(s));
+                    // fuel first, then wood we can spare: a second crafting table, a worse wooden tool.
+                    // Never what we're making (charcoal): it'd burn the count we're after
+                    int src = Inv.find(s -> isPlainFuel(s) && !input.test(s) && !s.is(output));
                     if (src < 0) src = spareWood(bot);
                     if (src >= 0) {
                         ItemStack f = Inv.inv().getItem(src);
