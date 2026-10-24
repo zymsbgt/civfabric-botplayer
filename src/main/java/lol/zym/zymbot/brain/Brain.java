@@ -58,6 +58,7 @@ public final class Brain {
     private ShoppingList.Find detour;
     private long noDetourUntil;
     private int graveDives;
+    private int graveStuck;
     private Player patient;
     /** Ticks spent in deep water with Baritone not taking us anywhere. */
     private int wetIdle;
@@ -118,6 +119,17 @@ public final class Brain {
         switch (active) {
             case REFLEX -> {
                 if (reflex != null) reflex.stop(bot);
+                // stuck on the way to a grave twice: no way there (Bot4 tried for its grave under the
+                // river every 10 minutes for an hour and a half). Leave it; a teammate's is tried later
+                if ("grave".equals(reflexKind) && bot.pendingGrave() != null && ++graveStuck >= 2) {
+                    bot.event("can't get to our grave at " + bot.pendingGrave().toShortString() + "; leaving it");
+                    bot.clearPendingGrave();
+                    graveStuck = 0;
+                }
+                if ("lootgrave".equals(reflexKind) && lootGrave != null) {
+                    graveTried.put(lootGrave, System.currentTimeMillis());
+                    lootGrave = null;
+                }
                 reflex = null;
                 reflexKind = null;
             }
