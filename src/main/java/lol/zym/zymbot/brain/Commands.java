@@ -626,6 +626,14 @@ public final class Commands {
                 if (wantsBed && bed >= 0 && bot.memory().bed != null) return new GiveTask(who, ItemTarget.of(Inv.inv().getItem(bed).getItem(), 1));
                 return null;
             }
+            case "loot" -> {
+                // a player's word: empty a grave that isn't a teammate's (the nearest, or the one at x y z)
+                if (a.length < 2 || !a[1].equalsIgnoreCase("grave")) return null;
+                if (a.length >= 5)
+                    return new LootGraveTask(new BlockPos(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4])));
+                var near = lol.zym.zymbot.world.GraveFinder.near(bot, 32);
+                return near.isEmpty() ? null : new LootGraveTask(near.get(0).pos());
+            }
             case "home" -> {
                 BotMemory.Pos h = bot.memory().home != null ? bot.memory().home : bot.memory().bed;
                 return h == null ? null : new GoToTask(h.pos(), 2);

@@ -64,6 +64,10 @@ public final class Nav {
         // keep off it for now). Avoided, it is a wall to go around, or to dig through like sand
         BuiltInRegistries.BLOCK.getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("trmt", "eroded_sand"))
                 .filter(b -> !s.blocksToAvoid.value.contains(b)).ifPresent(s.blocksToAvoid.value::add);
+        // CivFabric's grave is the same: a mound and a headstone, 13/16 at most, walked into as if air
+        // (Bot5 stood against one for minutes exploring for logs)
+        BuiltInRegistries.BLOCK.getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("civfabric", "grave"))
+                .filter(b -> !s.blocksToAvoid.value.contains(b)).ifPresent(s.blocksToAvoid.value::add);
         s.antiCheatCompatibility.value = true;
         s.renderPath.value = true;
         s.chatDebug.value = false;

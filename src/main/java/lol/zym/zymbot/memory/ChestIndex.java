@@ -53,6 +53,8 @@ public final class ChestIndex {
         AbstractContainerMenu menu = p.containerMenu;
         if (menu == p.inventoryMenu && openKey != null) closed(bot);
         if (menu == p.inventoryMenu || lastUsed == null || bot.ticks() - lastUsedTick > 20 * 60) return;
+        // a grave opens like a double chest, but it's no place to keep things: it goes once emptied
+        if (lol.zym.zymbot.world.GraveFinder.isGrave(lol.zym.zymbot.world.WorldView.state(lastUsed))) return;
         int size;
         if (menu instanceof ChestMenu c) size = c.getRowCount() * 9;
         else if (menu instanceof ShulkerBoxMenu) size = 27;

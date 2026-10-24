@@ -22,6 +22,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -199,6 +201,11 @@ public final class Brain {
                     shopping.stale();
                 }
                 if (s == Task.Status.SUCCESS && "grave".equals(reflexKind)) bot.clearPendingGrave();
+                if ("lootgrave".equals(reflexKind) && lootGrave != null) {
+                    // tried once (done, the pack filled, or it wouldn't open): not again for a while
+                    graveTried.put(lootGrave, System.currentTimeMillis());
+                    lootGrave = null;
+                }
                 reflex.stop(bot);
                 reflex = null;
                 reflexKind = null;
@@ -621,7 +628,7 @@ public final class Brain {
             case "flee", "bed" -> 5;
             case "fight" -> 4;
             case "eat", "shore", "shelter" -> 3;
-            case "unstuck", "grave", "receive", "forage" -> 2;
+            case "unstuck", "grave", "lootgrave", "receive", "forage" -> 2;
             case "sleep", "treat" -> 1;
             default -> 0;
         };
@@ -780,6 +787,29 @@ public final class Brain {
         return "snack";
     }
 
+    /** A teammate's grave we're emptying for them, and the ones tried lately (when). */
+    private net.minecraft.core.BlockPos lootGrave;
+    private final Map<net.minecraft.core.BlockPos, Long> graveTried = new HashMap<>();
+    private long graveScanTick;
+
+    /**
+     * A grave of another bot of ours within 24 blocks, while we have room: theirs stay in the team
+     * that way, and the headstone stops blocking paths. Anyone else's only on a player's word.
+     */
+    private net.minecraft.core.BlockPos teammateGrave(Bot bot) {
+        if ("lootgrave".equals(reflexKind)) return lootGrave;
+        if (bot.ticks() - graveScanTick < 100 || Inv.freeSlots() < 4) return null;
+        graveScanTick = bot.ticks();
+        graveTried.values().removeIf(t -> System.currentTimeMillis() - t > 10 * 60_000L);
+        for (var g : lol.zym.zymbot.world.GraveFinder.near(bot, 24)) {
+            if (graveTried.containsKey(g.pos()) || g.owner().isEmpty() || g.owner().equalsIgnoreCase(bot.name()) || !bot.isTeammate(g.owner()))
+                continue;
+            lootGrave = g.pos();
+            return lootGrave;
+        }
+        return null;
+    }
+
     private String wantedReflex(Bot bot) {
         var p = bot.player();
         BotConfig cfg = BotConfig.get();
@@ -847,6 +877,7 @@ public final class Brain {
         }
         // a grave trip is a long walk: not unarmed (unless it's close), the progression makes a sword first
         if (bot.pendingGrave() != null && (Inv.armed() || bot.pendingGrave().closerThan(p.blockPosition(), 48))) return "grave";
+        if (teammateGrave(bot) != null) return "lootgrave";
         if (bot.receiving()) return "receive";
         if (System.currentTimeMillis() > noTreatUntil && TreatTask.treatmentSlot(bot) >= 0) {
             patient = hurtTeammate(bot);
@@ -940,6 +971,10 @@ public final class Brain {
                 yield new EatTask();
             }
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
+            case "lootgrave" -> {
+                bot.event("a teammate's grave at " + lootGrave.toShortString() + ": taking their things for them");
+                yield new LootGraveTask(lootGrave);
+            }
             case "shelter" -> {
                 bot.event((bot.pacifism().bloodMoon() ? "blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "")
                         : ShelterTask.stormNight(bot) ? "storm night: drowned are hunting" : hideNight(bot) ? hideWhy : "night")
