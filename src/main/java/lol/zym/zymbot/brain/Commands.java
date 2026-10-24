@@ -95,7 +95,15 @@ public final class Commands {
         try {
             switch (cmd) {
                 case "help", "?" -> {
-                    return HELP;
+                    // in chat a reply has to fit a line or two: the command words, or the lines on one
+                    if (a.length > 1) {
+                        String w = a[1].toLowerCase(Locale.ROOT);
+                        String lines = Arrays.stream(HELP.split("\n")).filter(l -> l.matches("(?s).*\\b" + java.util.regex.Pattern.quote(w) + "\\b.*"))
+                                .collect(java.util.stream.Collectors.joining("\n"));
+                        return lines.isEmpty() ? "no help on '" + w + "'" : lines;
+                    }
+                    boolean inChat = from != null && !Set.of("claude", "local", "hub").contains(from.toLowerCase(Locale.ROOT));
+                    return inChat ? "commands: " + String.join(" ", WORDS) + " (zb help <command> for one)" : HELP;
                 }
                 case "status" -> {
                     return bot.statusLine();

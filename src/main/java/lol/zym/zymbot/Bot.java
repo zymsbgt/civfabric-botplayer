@@ -382,8 +382,26 @@ public final class Bot {
 
     /** Say something in server chat (heard within 150 blocks under ZymLabs Rules). */
     public void chat(String text) {
-        if (text.startsWith("/")) player().connection.sendCommand(text.substring(1));
-        else player().connection.sendChat(text);
+        if (text.startsWith("/")) {
+            player().connection.sendCommand(text.substring(1));
+            return;
+        }
+        // the server takes 256 characters a line and no line breaks: more kicked Bot1 and Bot2 both,
+        // answering a player's "zb help" with all 17 lines at once. Lines join with " | ", and a long
+        // reply goes out as at most two messages (more reads as spam)
+        String flat = text.strip().replaceAll("\\s*\\R\\s*", " | ").replaceAll("\\p{Cntrl}", " ");
+        for (int part = 0; part < 2 && !flat.isEmpty(); part++) {
+            if (flat.length() <= 256) {
+                player().connection.sendChat(flat);
+                return;
+            }
+            boolean last = part == 1;
+            int max = last ? 250 : 256;
+            int cut = flat.lastIndexOf(' ', max);
+            if (cut < max / 2) cut = max;
+            player().connection.sendChat(flat.substring(0, cut).strip() + (last ? " …" : ""));
+            flat = flat.substring(cut).strip();
+        }
     }
 
     /**
