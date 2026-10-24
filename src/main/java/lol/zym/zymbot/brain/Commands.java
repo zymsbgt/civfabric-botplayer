@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -50,6 +50,7 @@ public final class Commands {
             "follow [player] | come [player] | whereis <player> | goto x y z | goto x z | explore [dist]",
             "stash all (everything into our nearest chest, making one if need be, then pause) | loot grave [x y z]",
             "reforest (saplings into the stumps we left) | reforest [x z] [radius] (open grass on a 5-block grid)",
+            "tidy tables [keep] (pick up the base's spare crafting tables, keeping 2 by the board)",
             "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | skipnight",
             "heal <player> (stitches/medkit/wound mush) | campfire (warm the bed) | pacifist (pacifism, regen and bed warmth)",
             "forecast [readings [night] | players [name]] (the pooled moon odds, our guess, readings, players' records)",
@@ -646,6 +647,12 @@ public final class Commands {
                     return new LootGraveTask(new BlockPos(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4])));
                 var near = lol.zym.zymbot.world.GraveFinder.near(bot, 32);
                 return near.isEmpty() ? null : new LootGraveTask(near.get(0).pos());
+            }
+            case "tidy" -> {
+                // the spare crafting tables at the base: tidy [tables] [keep], two kept by the board
+                int keep = 2;
+                for (int i = 1; i < a.length; i++) if (a[i].matches("\\d+")) keep = Integer.parseInt(a[i]);
+                return new TidyTablesTask(keep);
             }
             case "reforest", "replant" -> {
                 // the stumps we remember, or open ground: reforest x z [radius] (else around us)

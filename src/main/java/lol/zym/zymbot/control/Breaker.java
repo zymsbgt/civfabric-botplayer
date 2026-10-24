@@ -60,7 +60,10 @@ public final class Breaker {
             return Result.DONE;
         }
         var builder = Nav.baritone().getBuilderProcess();
-        if (!builder.isActive()) {
+        // not started yet counts as gave up: a builder still busy with someone else's clearArea left
+        // the limit unset (-1), so this one was STUCK on its first tick, and so was every one after
+        // (tidying the base skipped all 85 tables in a minute)
+        if (!active || !builder.isActive()) {
             // Baritone gave up (or hasn't started): try again a couple of times
             if (starts >= 3) {
                 finish();
