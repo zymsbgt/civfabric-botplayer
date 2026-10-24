@@ -54,6 +54,7 @@ public class UnstuckTask extends Task {
         BlockPos feet = p.blockPosition();
         if (startY == Integer.MIN_VALUE) {
             startY = feet.getY();
+            fromY = startY;
             Nav.stop();
         }
         if (drop) return stepOff(bot, feet);
@@ -114,9 +115,15 @@ public class UnstuckTask extends Task {
      * Off a pillar or a platform: of the four ways off, the one whose fall hurts least (water breaks
      * a fall; lava rules a way out), and only if it leaves us more than 6 health. Walk off and land.
      */
+    private BlockPos digDown;
+    private Breaker digger;
+    /** Down past this and on the ground: done. Where we started, or where we stepped off. */
+    private int fromY;
+
     private Status stepOff(Bot bot, BlockPos feet) {
         var p = bot.player();
-        if (feet.getY() < startY && p.onGround()) {
+        // landed below where we stepped off (while digging down, only once we've stepped off at the end)
+        if (feet.getY() < fromY && p.onGround()) {
             Controls.forward(false);
             bot.event("down from " + startY + " to " + feet.getY());
             return Status.SUCCESS;
@@ -156,9 +163,31 @@ public class UnstuckTask extends Task {
             }
             if (dropDir == null || p.getHealth() - best <= 6) {
                 dropDir = null;
+                // on a pillar of our own: down through it a block at a time (Bot1 sat 20 up for 5
+                // minutes, its pillar built for a y it never needed and nothing left to stand on)
+                BlockPos under = feet.below();
+                // natural ground, or any block of a lone column (a plank Baritone capped the pillar with:
+                // nobody's floor has air on all four sides)
+                boolean column = net.minecraft.core.Direction.Plane.HORIZONTAL.stream().allMatch(d -> passable(under.relative(d)));
+                var underState = WorldView.state(under);
+                boolean diggable = (BlockRules.natural(underState) || column && !(underState.getBlock() instanceof net.minecraft.world.level.block.EntityBlock))
+                        && underState.getDestroySpeed(bot.level(), under) >= 0;
+                if (diggable && !passable(under.below()) && !WorldView.state(under.below()).getFluidState().is(FluidTags.LAVA)) {
+                    if (digDown == null || !digDown.equals(under)) {
+                        if (digDown == null) bot.event("stranded up here: digging down through the pillar");
+                        digDown = under.immutable();
+                        digger = new Breaker(under);
+                    }
+                    fromY = Integer.MIN_VALUE;
+                    var r = digger.tick();
+                    if (r == Breaker.Result.STUCK || r == Breaker.Result.OUT_OF_REACH) return fail("stranded, and can't dig down");
+                    ticks = Math.min(ticks, 20 * 10); // each block down is progress
+                    return Status.RUNNING;
+                }
                 return fail("stranded, and every way down is too far");
             }
             bot.event("stepping off to the " + dropDir.getName() + (best > 0 ? " (a fall costing " + (int) best + ")" : ""));
+            fromY = feet.getY();
         }
         Nav.stop();
         var target = net.minecraft.world.phys.Vec3.atBottomCenterOf(feet.relative(dropDir).relative(dropDir));

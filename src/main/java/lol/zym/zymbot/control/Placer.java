@@ -31,6 +31,8 @@ public final class Placer {
             var st = WorldView.state(c);
             if (!st.canBeReplaced() || !st.getFluidState().isEmpty() || !Breaker.inReach(c)) continue;
             if (p.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(c))) continue;
+            // on a chest it keeps the chest shut: a crafting table there stalled every stash for minutes
+            if (ChestLid.onChest(c)) continue;
             // a face place() will actually click: not just any solid block, which at a base is often a
             // chest or a bed, and that spot came back every time for 20 s ("couldn't place a crafting table")
             if (!clickableFace(p, c)) continue;

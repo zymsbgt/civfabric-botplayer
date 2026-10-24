@@ -55,6 +55,7 @@ public class StashTask extends Task {
                 return ticks > 20 * 120 ? fail("can't reach the stash chest") : Status.RUNNING;
             }
             Nav.stop();
+            if (lol.zym.zymbot.control.ChestLid.clearing(bot, chest)) return Status.RUNNING;
             if (ticks % 20 == 0) {
                 Placer.use(chest);
                 clicked = true;
