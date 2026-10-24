@@ -180,6 +180,12 @@ public final class Brain {
         String want = wantedReflex(bot);
         if (want != null && (reflex == null || !want.equals(reflexKind) && priority(want) > priority(reflexKind))) {
             if (reflex != null) reflex.stop(bot);
+            // a grave trip cut short (out of air, a fight) counts as tried: Bot5 dove for Bot4's
+            // grave under the river again the moment it surfaced, and drowned twice in 10 minutes
+            if ("lootgrave".equals(reflexKind) && lootGrave != null) {
+                graveTried.put(lootGrave, System.currentTimeMillis());
+                lootGrave = null;
+            }
             reflex = makeReflex(bot, want);
             reflexKind = want;
         }
@@ -809,6 +815,11 @@ public final class Brain {
         for (var g : lol.zym.zymbot.world.GraveFinder.near(bot, 24)) {
             if (graveTried.containsKey(g.pos()) || g.owner().isEmpty() || g.owner().equalsIgnoreCase(bot.name()) || !bot.isTeammate(g.owner()))
                 continue;
+            // under water: one breath doesn't get there and back. The owner's own trip knows when to give up
+            if (!WorldView.state(g.pos().above()).getFluidState().isEmpty() || !WorldView.state(g.pos()).getFluidState().isEmpty()) {
+                graveTried.put(g.pos(), System.currentTimeMillis());
+                continue;
+            }
             lootGrave = g.pos();
             return lootGrave;
         }
