@@ -215,6 +215,9 @@ public final class Brain {
                     if ("sleep".equals(reflexKind)) skipNight();
                     if ("unstuck".equals(reflexKind)) noUnstuckUntil = System.currentTimeMillis() + 2 * 60_000L;
                     if ("shore".equals(reflexKind)) noShoreUntil = System.currentTimeMillis() + 60_000L;
+                    // eating before the water didn't work: wade in rather than retry every second
+                    // (Bot1 stood on the bank re-trying a hotbar swap the server kept refusing)
+                    if ("snack".equals(reflexKind)) noSnackUntil = System.currentTimeMillis() + 60_000L;
                     if ("grave".equals(reflexKind)) bot.clearPendingGrave();
                 }
                 if ("detour".equals(reflexKind) && reflex instanceof DetourTask d) {
@@ -791,6 +794,7 @@ public final class Brain {
 
     /** Where the path ahead goes into water, while we eat up before it (for the event). */
     private net.minecraft.core.BlockPos snackFor;
+    private long noSnackUntil;
 
     /**
      * About to wade or swim in: eat up first, since the server allows no eating in water. Chased,
@@ -800,6 +804,7 @@ public final class Brain {
         var p = bot.player();
         if (p.isInWater() || bot.ticks() % 10 != 0 && !"snack".equals(reflexKind)) return null;
         if ("snack".equals(reflexKind)) return "snack";
+        if (System.currentTimeMillis() < noSnackUntil) return null;
         int food = p.getFoodData().getFoodLevel();
         if (food > 17 || EatTask.choose(bot) < 0) return null;
         net.minecraft.core.BlockPos wet = Nav.waterAhead(6);
