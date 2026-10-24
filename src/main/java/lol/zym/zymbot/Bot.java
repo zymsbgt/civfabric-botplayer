@@ -545,6 +545,8 @@ public final class Bot {
     public void onChat(String sender, String message) {
         if (sender != null) forecast.onPlayerChat(this, sender, message);
         if (sender == null || sender.equalsIgnoreCase(name()) || !isTeammate(sender)) return;
+        // a leader passes players' plain English on to Claude (chatToClaude)
+        if (lol.zym.zymbot.chat.LeaderChat.offer(this, sender, message)) return;
         String[] addr = Commands.address(message, name(), team.knownNames());
         if (addr == null) return;
         String target = addr[0];
@@ -1197,6 +1199,8 @@ public final class Bot {
         o.add("team_heard", heardMates);
         o.add("help_heard", team.radio().helpHeard());
         o.add("help_recalled", team.radio().helpRecalled());
+        // players' plain English to a leader: the hub raises each for Claude, who answers through us
+        o.add("chat_to_claude", lol.zym.zymbot.chat.LeaderChat.heard(this));
         // what kills and fells us, and who's near when we go down: for choosing who levels Medic
         o.add("death_causes", new com.google.gson.Gson().toJsonTree(memory.deathCauses));
         o.add("downed_causes", new com.google.gson.Gson().toJsonTree(memory.downedCauses));

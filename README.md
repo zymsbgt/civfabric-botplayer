@@ -296,6 +296,16 @@ gamma, and `0` turns this off. `/zymbot reload` re-reads it.
    range / `all`), `board_post`, `command_help`. Set `ZYMBOT_HUB_URL` if the hub isn't local and
    `ZYMBOT_LEADERS` to restrict which bots Claude may act as.
 
+6. **Players talk to the leader in plain English** (`chatToClaude`, on by default; leaders only).
+   A player in `teammates` who names the leader, "bots" or "leader" without `zb` ("Bot2, can you
+   grab me 16 oak logs?") gets `@player one moment…`, and the leader passes the line to the hub,
+   which raises it as a `chat` alert. `hub/wait-for-newcomer.mjs` prints it as
+   `CHAT from <player> to <leader> at x,y,z: <text>` and exits. The Claude session answers with the
+   MCP `command` tool as that leader: `say @<player> …` for the reply, the leader's own commands
+   or `tell <bot> <command>` for the work. `zb ...` and `Bot2 <command>` lines work as before.
+   One line per player every `chatToClaudeCooldownSeconds` (5); `"chatToClaude": false` turns it
+   off. It needs the hub: without one the line falls through to the command path.
+
 ## Commands
 
 The same language works in chat (`zb …`), in `/zymbot …`, over the radio and through Claude:

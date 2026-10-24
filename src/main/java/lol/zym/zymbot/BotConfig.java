@@ -46,6 +46,17 @@ public final class BotConfig {
     public boolean replyInChat = false;
 
     /**
+     * A leader passes plain English from the players in {@code teammates} on to Claude: a line naming
+     * it, "bots" or "leader" without the zb prefix goes to the hub as a "chat" alert, and the Claude
+     * session watching the alerts answers through the leader. Only a leader does it (a worker leaves
+     * players' chat to its leader), and only with a hub; {@code false} turns it off.
+     */
+    public boolean chatToClaude = true;
+
+    /** chatToClaude: least time between one player's lines passed on (seconds). */
+    public int chatToClaudeCooldownSeconds = 5;
+
+    /**
      * Team hub every bot connects to (hub/zymbot-hub.mjs), on this machine or another. Several,
      * comma-separated, are tried in turn until one answers (a machine that moves between networks).
      * "off" for none: no boards or updates then (the team talks over chat either way).

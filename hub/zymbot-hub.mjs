@@ -51,7 +51,7 @@ if (!TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
  *                 met: Set<lowercased name> (every bot a teammate has ever reported hearing),
  *                 alerts: [{seq, at, kind, name, heard_by, pos, dim, via}], learning: bool,
  *                 idle: Map<lowercased name, {kind, since, heard, alerted}> (paused or workless now),
- *                 helped: Set<"from|at"> (help requests already raised) }
+ *                 helped: Set<"from|at"> (help requests and "chat|..." player lines already raised) }
  */
 const servers = new Map();
 // From the clock, not 0: bots poll "messages after N" and keep N across a hub restart, so numbers
@@ -216,6 +216,14 @@ function noteHeard(sv, st) {
     const asker = member(sv, x.from);
     raise(sv, "help", { name: x.from, pos: asker?.state.pos, dim: asker?.state.dim, via: x.from === st.name ? "self" : "chat" }, st, { text: x.text, id: x.id });
     console.log(`${x.from} asks for help (heard by ${st.name}): ${x.text}`);
+  }
+  // a player talking to a leader in plain English (no zb): Claude answers through that leader
+  for (const x of st.chat_to_claude || []) {
+    const key = `chat|${helpKey(x)}`;
+    if (!x.from || sv.helped.has(key)) continue;
+    remember(key);
+    raise(sv, "chat", { name: x.from, pos: x.pos || st.pos, dim: st.dim, via: "chat" }, st, { text: x.text, id: x.id });
+    console.log(`${x.from} says to ${st.name}: ${x.text}`);
   }
   // the first few minutes on a server we had no list for: what's there now is the team, not news
   if (sv.learning && Date.now() - STARTED > LEARN_MS) {
