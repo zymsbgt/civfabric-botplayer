@@ -15,6 +15,8 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.level.block.Block;
 
 import java.util.*;
@@ -164,7 +166,8 @@ public class LevelTask extends Task {
             if (options.stream().noneMatch(o -> o.what().startsWith("walling"))) {
                 // logs pay to place, and cost nothing but a walk to gather
                 options.add(new Option("gathering logs to build with", 1.0 / 8,
-                        () -> new ObtainTask(ItemTarget.of(Items.OAK_LOG, Inv.count(Items.OAK_LOG) + 32))));
+                        () -> new ObtainTask(ItemTarget.of(Ingredient.of(ItemTags.LOGS_THAT_BURN),
+                                Inv.count(st -> st.is(ItemTags.LOGS_THAT_BURN)) + 32))));
             }
         }
 

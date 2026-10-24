@@ -11,7 +11,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 
+import net.minecraft.world.level.block.Block;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -24,6 +27,8 @@ public class ObtainTask extends Task {
     private final Set<String> failedMethods = new HashSet<>();
     private int failures;
     private String lastMethod;
+    /** Every method the running child stands for (one gather can cover several kinds of log). */
+    private final List<String> lastKeys = new ArrayList<>();
     private boolean triedShear;
     private int depth;
 
@@ -93,7 +98,7 @@ public class ObtainTask extends Task {
             Status s = runChild(bot);
             if (s == Status.FAILURE) {
                 bot.event(target.name() + ": " + lastMethod + " failed — " + failureReason());
-                if (lastMethod != null) failedMethods.add(lastMethod);
+                failedMethods.addAll(lastKeys);
                 if (++failures > 6) return fail("too many failed attempts (" + failureReason() + ")");
             }
             return Status.RUNNING;
@@ -103,6 +108,8 @@ public class ObtainTask extends Task {
         if (!triedShear && target.candidates().stream().anyMatch(c -> new net.minecraft.world.item.ItemStack(c).is(net.minecraft.tags.ItemTags.WOOL))) {
             triedShear = true;
             lastMethod = "SHEAR wool";
+            lastKeys.clear();
+            lastKeys.add(lastMethod);
             setChild(bot, new ShearTask(target.count()));
             return Status.RUNNING;
         }
@@ -110,9 +117,11 @@ public class ObtainTask extends Task {
         if (depth > 10) return fail("plan too deep for " + target.name());
         Planner planner = bot.planner();
         Planner.Method best = null;
+        List<Planner.Method> options = new ArrayList<>();
         for (Item c : target.candidates()) {
             Planner.Method m = planner.best(c, failedMethods, ancestors);
             if (m == null) continue;
+            options.add(m);
             if (best == null || m.cost() < best.cost()) best = m;
         }
         if (best == null || best.cost() >= Planner.INF) {
@@ -123,11 +132,11 @@ public class ObtainTask extends Task {
         int missing = target.count() - target.have();
         Task next = switch (best.kind()) {
             case HAVE -> null;
-            case GATHER -> gatherStep(bot, best, missing);
+            case GATHER -> gatherStep(bot, best, peers(best, options), missing);
             case HUNT -> new HuntTask(best.mobs(), target.match(), target.count()).orPokemonFor(target.match());
             case FETCH -> new FetchTask(best.at(), target.withCount(target.count()));
             case PICKUP -> new PickupTask(best.at(), 4);
-            case CRAFT -> craftStep(bot, best, missing);
+            case CRAFT -> craftStep(bot, best, peers(best, options), missing);
             case SMELT -> smeltStep(bot, best, missing);
         };
         if (next == null) {
@@ -135,6 +144,13 @@ public class ObtainTask extends Task {
             return Status.RUNNING;
         }
         lastMethod = key(best);
+        lastKeys.clear();
+        lastKeys.add(lastMethod);
+        if (best.kind() == Planner.Kind.GATHER && next instanceof GatherTask
+                || best.kind() == Planner.Kind.CRAFT && next instanceof ObtainTask o && o.target.name().startsWith("any of ")) {
+            for (Planner.Method p : peers(best, options)) lastKeys.add(key(p));
+            if (lastKeys.size() > 1) lastMethod = best.kind() + " any of " + lastKeys.size();
+        }
         setChild(bot, next);
         return Status.RUNNING;
     }
@@ -143,7 +159,19 @@ public class ObtainTask extends Task {
         return m.kind() + " " + Inv.id(m.item());
     }
 
-    private Task gatherStep(Bot bot, Planner.Method m, int missing) {
+    /**
+     * The other candidates gathered at the same cost as {@code best}: with no log seen nearby every
+     * kind costs the same, and exploring for oak alone walked Bot3 past spruce until it gave up.
+     */
+    private static List<Planner.Method> peers(Planner.Method best, List<Planner.Method> options) {
+        List<Planner.Method> out = new ArrayList<>();
+        for (Planner.Method m : options) {
+            if (m != best && m.kind() == best.kind() && Math.abs(m.cost() - best.cost()) < 1e-6) out.add(m);
+        }
+        return out;
+    }
+
+    private Task gatherStep(Bot bot, Planner.Method m, List<Planner.Method> peers, int missing) {
         // need a tool first?
         var state = m.blocks().get(0).defaultBlockState();
         boolean anyHarvestable = m.blocks().stream().anyMatch(b -> Inv.canHarvest(b.defaultBlockState()));
@@ -152,21 +180,59 @@ public class ObtainTask extends Task {
             if (tool == null) return null;
             return sub(ItemTarget.of(tool, 1));
         }
-        return new GatherTask(m.blocks(), target.match(), target.have() + missing);
+        List<Block> blocks = new ArrayList<>(m.blocks());
+        for (Planner.Method p : peers) for (Block b : p.blocks()) if (!blocks.contains(b)) blocks.add(b);
+        return new GatherTask(blocks, target.match(), target.have() + missing);
     }
 
-    private Task craftStep(Bot bot, Planner.Method m, int missing) {
+    private Task craftStep(Bot bot, Planner.Method m, List<Planner.Method> peers, int missing) {
         var recipe = m.craft();
         int per = Math.max(1, Recipes.result(recipe).getCount());
         int crafts = (missing + per - 1) / per;
-        for (Recipes.Need n : Recipes.needs(recipe.value())) {
+        List<Recipes.Need> needs = Recipes.needs(recipe.value());
+        for (Recipes.Need n : needs) {
             int need = n.perCraft() * crafts;
-            if (n.have() < need) return sub(ItemTarget.of(n.ingredient(), need));
+            if (n.have() < need) {
+                ItemTarget any = anyIngredient(needs, n, per, peers, need);
+                return sub(any != null ? any : ItemTarget.of(n.ingredient(), need));
+            }
         }
         if (!Recipes.fits2x2(recipe.value()) && !Inv.has(Items.CRAFTING_TABLE) && !bot.hasStationNearby("crafting_table")) {
             return sub(ItemTarget.of(Items.CRAFTING_TABLE, 1));
         }
         return new CraftTask(recipe, crafts);
+    }
+
+    /**
+     * The missing ingredient {@code n} of {@code needs}, or whatever stands in its place in the
+     * equally cheap crafts of the other kinds of the same thing: planks from whatever log turns up,
+     * slabs, fences, signs or doors from whatever planks (Bot3 explored for oak for its crafting
+     * table, passing spruce). Once one kind is in the pack its own craft is the cheap one and gets
+     * made. A peer counts when it differs from {@code needs} in that one ingredient only.
+     */
+    private static ItemTarget anyIngredient(List<Recipes.Need> needs, Recipes.Need n, int per, List<Planner.Method> peers, int need) {
+        List<Ingredient> ings = new ArrayList<>(List.of(n.ingredient()));
+        List<String> rest = new ArrayList<>();
+        for (Recipes.Need o : needs) if (o != n) rest.add(o.key() + "x" + o.perCraft());
+        for (Planner.Method p : peers) {
+            if (p.craft() == null || Recipes.result(p.craft()).getCount() != per) continue;
+            List<Recipes.Need> pn = Recipes.needs(p.craft().value());
+            if (pn.size() != needs.size()) continue;
+            List<String> left = new ArrayList<>(rest);
+            Recipes.Need odd = null;
+            for (Recipes.Need o : pn) {
+                if (left.remove(o.key() + "x" + o.perCraft())) continue;
+                if (odd != null) { odd = null; break; }
+                odd = o;
+            }
+            if (odd == null || !left.isEmpty() || odd.perCraft() != n.perCraft() || odd.key().equals(n.key())) continue;
+            ings.add(odd.ingredient());
+        }
+        if (ings.size() < 2) return null;
+        List<Item> cands = new ArrayList<>();
+        for (Ingredient i : ings) for (Item c : Recipes.candidates(i)) if (!cands.contains(c)) cands.add(c);
+        return new ItemTarget("any of " + ings.size() + " " + Inv.id(cands.get(0)).replace("minecraft:", "") + "*",
+                s -> ings.stream().anyMatch(i -> i.test(s)), cands, need);
     }
 
     private Task smeltStep(Bot bot, Planner.Method m, int missing) {
@@ -206,7 +272,7 @@ public class ObtainTask extends Task {
             return new ItemTarget("coal", s -> s.is(Items.COAL) || s.is(Items.CHARCOAL), java.util.List.of(Items.CHARCOAL, Items.COAL),
                     coal + (n + 7) / 8);
         return new ItemTarget("planks", s -> s.is(net.minecraft.tags.ItemTags.PLANKS),
-                java.util.List.of(Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS),
+                Recipes.candidates(Ingredient.of(net.minecraft.tags.ItemTags.PLANKS)),
                 Inv.count(s -> s.is(net.minecraft.tags.ItemTags.PLANKS)) + (n * 2 + 2) / 3);
     }
 }
