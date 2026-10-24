@@ -82,6 +82,7 @@ public final class Bot {
     private boolean wasDead;
     private Long downedSince;
     private boolean gaveUp;
+    private boolean ready;
     private final Deque<String> heard = new ArrayDeque<>();
     private final Deque<Long> heardAt = new ArrayDeque<>();
 
@@ -210,6 +211,12 @@ public final class Bot {
     private void noteDamage() {
         var p = player();
         float h = p.getHealth();
+        // we join at full health until the server says otherwise: "hurt 13.5 by unknown" on join
+        // was only the real figure arriving
+        if (!ready) {
+            lastHealth = h;
+            return;
+        }
         if (lastHealth >= 0 && h < lastHealth - 0.01f) {
             var src = p.getLastDamageSource();
             String what = src == null ? "unknown" : src.getEntity() != null
@@ -272,6 +279,15 @@ public final class Bot {
         } else {
             stuckTicks++;
         }
+    }
+
+    /** The chunk we stand in and the eight around it are loaded. */
+    private boolean chunksAround(BlockPos at) {
+        int cx = at.getX() >> 4, cz = at.getZ() >> 4;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) if (!level().getChunkSource().hasChunk(cx + dx, cz + dz)) return false;
+        }
+        return true;
     }
 
     /** Underground or in water and going nowhere for 20 s: time to climb out by hand. */
@@ -675,7 +691,11 @@ public final class Bot {
         if (tick % 20 == 5) notePlayers();
 
         if (handleDeath()) return;
-        if (!enabled) {
+        // the server sends our position, pack and chunks over the first seconds: auto-started,
+        // Bot1 planned before they were in, saw nothing at 8, 65, 8 and asked the board for a
+        // crafting table and a wooden sword. Until then we stand by as if paused
+        if (!ready) ready = tick >= 100 && chunksAround(p.blockPosition());
+        if (!enabled || !ready) {
             // paused isn't a reason to drown (a bot can rejoin underwater): keep its head up
             var pl = player();
             boolean sinking = pl.isInWater() && (pl.isUnderWater() || pl.getAirSupply() < pl.getMaxAirSupply());
@@ -949,10 +969,12 @@ public final class Bot {
             stuckHelp = null;
         }
         String task = brain.describe();
-        // idle with nothing to do stands still on purpose; exploring (the idle wander) should move
+        // idle with nothing to do stands still on purpose, and so does a board job waiting at the
+        // board for its helpers (not one still walking there); exploring (the idle wander) should move
         boolean stays = !enabled || player().isSleeping() || task.equals("[idle] nothing")
                 || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft", "Home for the night", "Catch")
-                        .anyMatch(task::contains);
+                        .anyMatch(task::contains)
+                || task.endsWith("(wait)");
         if (stays || stillAt == null || !stillAt.closerThan(here, 4)) {
             stillAt = stays ? null : here;
             stillSince = now;
