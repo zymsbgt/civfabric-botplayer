@@ -88,6 +88,9 @@ public class ObtainTask extends Task {
 
     @Override
     protected Status onTick(Bot bot) {
+        // enough logs, but the gather still has saplings to put back where the trees stood: let it
+        // (stopping it here meant almost no tree was ever replanted, and the forests went)
+        if (target.satisfied() && child instanceof GatherTask) return runChild(bot) == Status.RUNNING ? Status.RUNNING : Status.SUCCESS;
         if (target.satisfied()) return Status.SUCCESS;
         // a single item we know of no chest for: a teammate in earshot may (answered over the radio,
         // in time for the next plan)

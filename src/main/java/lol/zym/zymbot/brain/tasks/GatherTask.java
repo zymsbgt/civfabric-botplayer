@@ -140,6 +140,7 @@ public class GatherTask extends Task {
             var e = it.next();
             BlockPos stump = e.getKey();
             if (!ReplantTask.plantable(stump) || !stump.closerThan(bot.player().blockPosition(), 32)) {
+                ReforestTask.remember(bot, stump);
                 it.remove();
                 continue;
             }
@@ -148,6 +149,7 @@ public class GatherTask extends Task {
                 return true;
             }
             if (Inv.count(st -> st.is(net.minecraft.tags.ItemTags.SAPLINGS)) == 0) {
+                for (BlockPos st : stumps.keySet()) ReforestTask.remember(bot, st);
                 stumps.clear();
                 return false;
             }
@@ -315,6 +317,9 @@ public class GatherTask extends Task {
     @Override
     public void stop(Bot bot) {
         super.stop(bot);
+        // cut short (a reflex, a failure, a parent done with us): the trees still want saplings
+        if (Minecraft.getInstance().player != null) for (BlockPos st : stumps.keySet()) ReforestTask.remember(bot, st);
+        stumps.clear();
         mining = false;
         if (Minecraft.getInstance().player != null) Nav.stop();
     }

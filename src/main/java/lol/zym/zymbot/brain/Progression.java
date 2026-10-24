@@ -86,6 +86,9 @@ public final class Progression {
                 b -> new SleepTask(b.memory().bed.pos(), true));
         // CivFabric: a bed only heals with a campfire beside it, and health comes back no other way
         add("warm_bed", () -> b().memory().bed == null || b().memory().bedWarm, b -> new WarmBedTask());
+        // trees we cut and left bare (no sapling on us at the time): back with saplings from the chests,
+        // a batch at a time. The bots had cleared most of a forest by the base
+        add("replant", () -> ReforestTask.pending(b()) < 4 || !ReforestTask.saplingsAbout(b()), b -> ReforestTask.stumps());
         // food to last a few days away from the farm: 80 hunger points each (raw meat at its cooked worth)
         add("provisions", () -> foodPoints() >= FOOD_POINTS, Progression::provision);
         // nothing past here until the team can feed itself

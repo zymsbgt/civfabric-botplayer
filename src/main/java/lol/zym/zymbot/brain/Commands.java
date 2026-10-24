@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -48,6 +48,8 @@ public final class Commands {
             "start | pause | stop (clears job) | role worker|leader",
             "get <item> [n] | give <player> <item> [n] | hunt [animal] [n]",
             "follow [player] | come [player] | whereis <player> | goto x y z | goto x z | explore [dist]",
+            "stash all (everything into our nearest chest, making one if need be, then pause) | loot grave [x y z]",
+            "reforest (saplings into the stumps we left) | reforest [x z] [radius] (open grass on a 5-block grid)",
             "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | skipnight",
             "heal <player> (stitches/medkit/wound mush) | campfire (warm the bed) | pacifist (pacifism, regen and bed warmth)",
             "forecast [readings [night] | players [name]] (the pooled moon odds, our guess, readings, players' records)",
@@ -644,6 +646,14 @@ public final class Commands {
                     return new LootGraveTask(new BlockPos(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4])));
                 var near = lol.zym.zymbot.world.GraveFinder.near(bot, 32);
                 return near.isEmpty() ? null : new LootGraveTask(near.get(0).pos());
+            }
+            case "reforest", "replant" -> {
+                // the stumps we remember, or open ground: reforest x z [radius] (else around us)
+                if (a.length == 1 && ReforestTask.pending(bot) > 0) return ReforestTask.stumps();
+                BlockPos me = bot.player().blockPosition();
+                if (a.length >= 3) return ReforestTask.area(new BlockPos(Integer.parseInt(a[1]), me.getY(), Integer.parseInt(a[2])),
+                        a.length > 3 ? Integer.parseInt(a[3]) : 24);
+                return ReforestTask.area(me, a.length > 1 ? Integer.parseInt(a[1]) : 24);
             }
             case "stash", "store" -> {
                 return a.length > 1 && a[1].equalsIgnoreCase("all") ? new EmptyPackTask() : null;

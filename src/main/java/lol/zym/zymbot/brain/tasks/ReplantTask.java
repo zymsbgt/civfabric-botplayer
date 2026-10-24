@@ -31,9 +31,11 @@ public class ReplantTask extends Task {
         return "Replant at " + stump.toShortString();
     }
 
-    /** Somewhere a sapling can go: air, on dirt or grass. */
+    /** Somewhere a sapling can go: air or short grass (it's replaced), on dirt or grass. */
     public static boolean plantable(BlockPos at) {
-        return WorldView.loaded(at) && WorldView.state(at).isAir() && WorldView.state(at.below()).is(BlockTags.DIRT);
+        if (!WorldView.loaded(at)) return false;
+        var s = WorldView.state(at);
+        return (s.isAir() || s.canBeReplaced() && s.getFluidState().isEmpty()) && WorldView.state(at.below()).is(BlockTags.DIRT);
     }
 
     @Override

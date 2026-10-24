@@ -125,6 +125,8 @@ public final class BotMemory {
     public Map<String, Long> fighters = new HashMap<>();
     /** Our graves still to be emptied, oldest first: they survive a restart and a second death. */
     public List<Pos> graves = new ArrayList<>();
+    /** Where trees we cut stood and got no sapling back (none on us, or we'd moved on): ReforestTask goes back. */
+    public List<Pos> stumps = new ArrayList<>();
     /**
      * Where lava or fire killed us, or burned us on the way to a grave. A grave near one isn't worth
      * going back for: Bot4 died at the same lava cave four times, each death leaving the next grave.
