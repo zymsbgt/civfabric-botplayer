@@ -438,13 +438,13 @@ public final class Progression {
     }
 
     /** Where our things are kept: home, else the team's base, else nowhere yet (a chest goes where we stand). */
-    private static BlockPos stashBase(Bot bot) {
+    public static BlockPos stashBase(Bot bot) {
         if (bot.memory().home != null && bot.memory().home.dim.equals(bot.dim())) return bot.memory().home.pos();
         return ClassPlan.teamHome(bot);
     }
 
     /** A chest of ours by the base (or by us, with no base) that isn't known to be full. */
-    private static BlockPos stashChest(Bot bot) {
+    public static BlockPos stashChest(Bot bot) {
         BlockPos base = stashBase(bot);
         BlockPos at = base != null ? base : bot.player().blockPosition();
         int reach = base != null ? 32 : 48;

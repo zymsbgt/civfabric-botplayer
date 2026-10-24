@@ -22,9 +22,16 @@ public class StashTask extends Task {
     private int moved;
     /** We clicked the chest: an open container is ours to fill, not some screen left over from before. */
     private boolean clicked;
+    /** Everything in the pack, not just what Keep says to store (the bot is about to log off). */
+    private boolean all;
 
     public StashTask(BlockPos chest) {
         this.chest = chest;
+    }
+
+    public StashTask all() {
+        all = true;
+        return this;
     }
 
     @Override
@@ -61,7 +68,7 @@ public class StashTask extends Task {
         }
         if (ticks % 4 != 0) return Status.RUNNING;
         var menu = p.containerMenu;
-        Keep.Pile pile = Keep.surplus(bot).stream().filter(x -> x.fate() == Keep.Fate.STORE).findFirst().orElse(null);
+        Keep.Pile pile = all ? anyPile() : Keep.surplus(bot).stream().filter(x -> x.fate() == Keep.Fate.STORE).findFirst().orElse(null);
         if (pile == null) {
             p.closeContainer();
             if (moved > 0) bot.event("stashed " + moved + " stacks at " + chest.toShortString());
@@ -92,6 +99,15 @@ public class StashTask extends Task {
         }
         if (ticks > 20 * 200) return fail("stashing took too long");
         return Status.RUNNING;
+    }
+
+    /** The first stack in the pack (main slots only: armour and the offhand don't shift-click into a chest). */
+    private static Keep.Pile anyPile() {
+        for (int i = 0; i < 36; i++) {
+            var st = Inv.inv().getItem(i);
+            if (!st.isEmpty()) return new Keep.Pile(i, st.getItem(), st.getCount(), Keep.Fate.STORE);
+        }
+        return null;
     }
 
     @Override

@@ -145,6 +145,7 @@ public final class ChatRadio {
         if (mem.home != null) b.append(" hm=").append(mem.home.x).append(',').append(mem.home.y).append(',').append(mem.home.z);
         // paused, or with nothing to do: teammates tell the hub, and Claude gets a bot back to work
         if (!bot.enabled()) b.append(" en=0");
+        else if (bot.brain().focused()) b.append(" fx=1");
         else if (bot.brain().workless()) b.append(" wl=1");
         List<String> classes = lol.zym.zymbot.brain.ClassPlan.classes(bot);
         if (!classes.isEmpty()) b.append(" cl=").append(String.join(",", classes));
@@ -316,6 +317,7 @@ public final class ChatRadio {
                 case "fs" -> s.addProperty("food_secure", "1".equals(v));
                 case "hm" -> s.addProperty("home", v.replace(",", ", "));
                 case "en" -> s.addProperty("enabled", !"0".equals(v));
+                case "fx" -> s.addProperty("focused", "1".equals(v));
                 case "wl" -> s.addProperty("workless", "1".equals(v));
                 case "cl" -> {
                     JsonArray a = new JsonArray();

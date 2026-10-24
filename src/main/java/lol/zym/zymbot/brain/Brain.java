@@ -92,6 +92,11 @@ public final class Brain {
         repeatCmd = null;
     }
 
+    /** On a job that only danger may interrupt: emptying the pack before the bot is closed. */
+    public boolean focused() {
+        return job instanceof EmptyPackTask;
+    }
+
     public Task job() {
         return job;
     }
@@ -817,6 +822,13 @@ public final class Brain {
         // diving for our own grave needs the breath: surface at a third, not at four fifths
         double airFloor = "grave".equals(reflexKind) ? 0.35 : 0.8;
         if (p.isUnderWater() && p.getAirSupply() < p.getMaxAirSupply() * airFloor) return "air";
+        // emptying the pack to log off (the user's rule): nothing but danger gets in the way, a
+        // teammate's food or grave included. Starving counts, out of the water
+        if (focused()) {
+            String defence = defend(bot);
+            if (defence != null) return defence;
+            return p.getFoodData().getFoodLevel() <= EatTask.MUST_EAT && !p.isInWater() && EatTask.choose(bot) >= 0 ? "eat" : null;
+        }
         String snack = snackBeforeWater(bot);
         if (snack != null) return snack;
         String defence = defend(bot);

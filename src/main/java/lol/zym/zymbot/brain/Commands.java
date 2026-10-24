@@ -402,6 +402,7 @@ public final class Commands {
                     return newer ? "noted where " + a[1] + " was" : "already knew newer";
                 }
                 case "receive" -> {
+                    if (!bot.enabled() || bot.brain().focused()) return "not now: " + (bot.enabled() ? "emptying my pack" : "paused");
                     int secs = a.length > 1 ? Math.max(1, Math.min(30, Integer.parseInt(a[1]))) : 8;
                     bot.receive(secs);
                     return "holding still " + secs + " s to catch what " + from + " throws";
@@ -491,6 +492,8 @@ public final class Commands {
             }
             Task job = build(bot, from, a);
             if (job == null) return "unknown command '" + cmd + "' (try help)";
+            // a teammate's errand waits while we empty the pack; a player or Claude may still redirect us
+            if (bot.brain().focused() && bot.isTeammate(from)) return "not now: emptying my pack";
             bot.brain().assign(job, from, loop ? String.join(" ", a) : null);
             bot.setEnabled(true);
             return "ok: " + job.name();
@@ -633,6 +636,9 @@ public final class Commands {
                     return new LootGraveTask(new BlockPos(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4])));
                 var near = lol.zym.zymbot.world.GraveFinder.near(bot, 32);
                 return near.isEmpty() ? null : new LootGraveTask(near.get(0).pos());
+            }
+            case "stash", "store" -> {
+                return a.length > 1 && a[1].equalsIgnoreCase("all") ? new EmptyPackTask() : null;
             }
             case "home" -> {
                 BotMemory.Pos h = bot.memory().home != null ? bot.memory().home : bot.memory().bed;

@@ -63,6 +63,9 @@ public final class FoodShare {
         Gift best = null;
         for (TeamBus.Member m : bot.team().inRange()) {
             if (!m.state().has("food_stock") || !m.dim().equals(bot.dim())) continue;
+            // paused or emptying its pack to log off: food handed over now ends up left behind
+            if (m.state().has("enabled") && !m.state().get("enabled").getAsBoolean()
+                    || m.state().has("focused") && m.state().get("focused").getAsBoolean()) continue;
             if (m.distanceTo(me.getX(), me.getY(), me.getZ()) > REACH) continue;
             if (now - lastGift.getOrDefault(key(m.name()), 0L) < PER_MATE_MS) continue;
             Map<String, Integer> theirs = stock(m.state());
