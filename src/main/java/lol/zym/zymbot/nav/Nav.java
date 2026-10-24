@@ -171,6 +171,81 @@ public final class Nav {
         return g instanceof baritone.api.utils.interfaces.IGoalRenderPos r ? r.getGoalPos() : null;
     }
 
+    private static long erodedLiftedUntil;
+
+    /**
+     * Standing in eroded sand: kept off it, Baritone finds no way out when it's all around (Bot4 sat
+     * at its bed, eroded sand on three sides, for half an hour). From inside, the next block of it is
+     * level ground, so for 20 s it's walkable again; once we're out it's avoided as before.
+     */
+    public static void unhem(BlockPos feet) {
+        var eroded = BuiltInRegistries.BLOCK.getOptional(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("trmt", "eroded_sand")).orElse(null);
+        if (eroded == null) return;
+        var avoid = BaritoneAPI.getSettings().blocksToAvoid.value;
+        long now = System.currentTimeMillis();
+        if (hopUntil > 0 && now > hopUntil) {
+            lol.zym.zymbot.control.Controls.forward(false);
+            lol.zym.zymbot.control.Controls.jump(false);
+            hopUntil = 0;
+            hemSince = now;
+        }
+        if (lol.zym.zymbot.world.WorldView.state(feet).is(eroded)) {
+            if (now > erodedLiftedUntil) ZymBotMod.LOG.info("standing in eroded sand: walkable for a while");
+            erodedLiftedUntil = now + 20_000L;
+            avoid.remove(eroded);
+            hemAt = null;
+            return;
+        }
+        // every way off this block leads onto (or into) it: walkable for a while, as above. Bot4 stood
+        // on a lone sand block in sugar cane, eroded sand all round but for a crafting table
+        int exits = 0, onto = 0;
+        for (var d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var n = feet.relative(d);
+            var st = lol.zym.zymbot.world.WorldView.state(n);
+            boolean open = (st.isAir() || st.canBeReplaced() && st.getFluidState().isEmpty())
+                    && lol.zym.zymbot.world.WorldView.state(n.above()).isAir();
+            if (st.is(eroded) || open && lol.zym.zymbot.world.WorldView.state(n.below()).is(eroded)) onto++;
+            else if (open) exits++;
+        }
+        if (exits == 0 && onto > 0) {
+            if (now > erodedLiftedUntil) ZymBotMod.LOG.info("every way out of {} is eroded sand: walkable for a while", feet.toShortString());
+            erodedLiftedUntil = now + 20_000L;
+            avoid.remove(eroded);
+        }
+        if (now > erodedLiftedUntil && !avoid.contains(eroded)) avoid.add(eroded);
+        // in a hole in it, eroded sand on two sides or more and nothing to path over: a player would
+        // hop up onto it (10/16 high). Bot4 sat in a flooded one by its bed after the next block was dug
+        net.minecraft.core.BlockPos up = null;
+        int around = 0;
+        for (var d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var n = feet.relative(d);
+            if (!lol.zym.zymbot.world.WorldView.state(n).is(eroded)) continue;
+            around++;
+            if (lol.zym.zymbot.world.WorldView.state(n.above()).isAir() && lol.zym.zymbot.world.WorldView.state(n.above(2)).isAir()) up = n;
+        }
+        if (around < 2 || up == null) {
+            hemAt = null;
+            return;
+        }
+        if (!feet.equals(hemAt)) {
+            hemAt = feet.immutable();
+            hemSince = now;
+            return;
+        }
+        if (hopUntil == 0 && now - hemSince > 10_000L) {
+            ZymBotMod.LOG.info("boxed in by eroded sand at {}: hopping up onto {}", feet.toShortString(), up.toShortString());
+            stop();
+            var top = net.minecraft.world.phys.Vec3.atCenterOf(up).add(0, 0.6, 0);
+            lol.zym.zymbot.control.Controls.lookAt(top, 180f);
+            lol.zym.zymbot.control.Controls.forward(true);
+            lol.zym.zymbot.control.Controls.jump(true);
+            hopUntil = now + 800L;
+        }
+    }
+
+    private static net.minecraft.core.BlockPos hemAt;
+    private static long hemSince, hopUntil;
+
     public static void stop() {
         lastGoal = null;
         IBaritone b = baritone();

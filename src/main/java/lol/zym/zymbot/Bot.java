@@ -707,6 +707,7 @@ public final class Bot {
         // right after joining the chunks may not be in yet, so keep looking until something shows up
         if (tick % 600 == 1 || surveyed.isEmpty() && tick % 40 == 0) survey();
         if (tick % 20 == 5) notePlayers();
+        if (tick % 10 == 3) Nav.unhem(p.blockPosition());
 
         if (handleDeath()) return;
         // the server sends our position, pack and chunks over the first seconds: auto-started,
