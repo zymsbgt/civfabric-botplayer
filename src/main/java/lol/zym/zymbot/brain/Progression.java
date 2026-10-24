@@ -40,7 +40,7 @@ public final class Progression {
         // one we know of close by counts: crafting walks to it, and making a second wastes planks
         add("crafting_table", () -> Inv.has(Items.CRAFTING_TABLE) || b().memory().nearestStation("crafting_table",
                         b().player().blockPosition(), b().dim(), 48)
-                .filter(st -> lol.zym.zymbot.world.WorldView.state(st.at.pos()).is(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE))
+                .filter(st -> lol.zym.zymbot.world.WorldView.craftingTable(lol.zym.zymbot.world.WorldView.state(st.at.pos())))
                 .isPresent(), b -> obtain(Items.CRAFTING_TABLE, 1), Map.of(Items.CRAFTING_TABLE, 1));
         // a sword before any long walk (rejoining the team, a grave): a spider pack killed an unarmed bot
         // in seconds, and a Pokémon that fights back has to be finished. Worth the 3 food it costs (a

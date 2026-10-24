@@ -713,7 +713,12 @@ public final class Bot {
         // the server sends our position, pack and chunks over the first seconds: auto-started,
         // Bot1 planned before they were in, saw nothing at 8, 65, 8 and asked the board for a
         // crafting table and a wooden sword. Until then we stand by as if paused
-        if (!ready) ready = tick >= 100 && chunksAround(p.blockPosition());
+        if (!ready) {
+            ready = tick >= 100 && chunksAround(p.blockPosition());
+            // the tables around us before the first plan: Bot4 woke beside the base's and went off
+            // into the wild to make its own, the goal picked before the 5 s look found any
+            if (ready) indexTables();
+        }
         if (!enabled || !ready) {
             // paused isn't a reason to drown (a bot can rejoin underwater): keep its head up
             var pl = player();
@@ -1024,12 +1029,12 @@ public final class Bot {
     private void indexTables() {
         BlockPos me = player().blockPosition();
         for (BlockPos q : BlockPos.betweenClosed(me.offset(-12, -6, -12), me.offset(12, 6, 12))) {
-            if (!(WorldView.state(q).getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock)) continue;
+            if (!WorldView.craftingTable(WorldView.state(q))) continue;
             if (memory.stations.stream().anyMatch(s -> s.at.pos().equals(q)) || nearSomeoneElsesBuild(q)) continue;
             memory.addStation("crafting_table", q.immutable(), dim(), false);
         }
         memory.stations.removeIf(s -> "crafting_table".equals(s.type) && dim().equals(s.at.dim) && s.at.pos().closerThan(me, 12)
-                && WorldView.loaded(s.at.pos()) && !(WorldView.state(s.at.pos()).getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock));
+                && WorldView.loaded(s.at.pos()) && !WorldView.craftingTable(WorldView.state(s.at.pos())));
     }
 
     /**

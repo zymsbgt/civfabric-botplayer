@@ -27,7 +27,8 @@ public final class ChestLid {
     public static boolean clearing(Bot bot, BlockPos chest) {
         BlockPos up = chest.above();
         var s = WorldView.state(up);
-        if (!(WorldView.state(chest).getBlock() instanceof ChestBlock) || !s.isRedstoneConductor(bot.level(), up) || !OURS.contains(s.getBlock())) {
+        if (!(WorldView.state(chest).getBlock() instanceof ChestBlock) || !s.isRedstoneConductor(bot.level(), up)
+                || !OURS.contains(s.getBlock()) && !WorldView.craftingTable(s)) {
             breaker = null;
             return false;
         }

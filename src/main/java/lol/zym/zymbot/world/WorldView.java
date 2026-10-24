@@ -15,6 +15,17 @@ public final class WorldView {
         return Minecraft.getInstance().level;
     }
 
+    /**
+     * A crafting table: vanilla's, or Visual Workbench's stand-in, which every table placed in the
+     * pack turns into (visualworkbench:minecraft/crafting_table, a BaseEntityBlock with a normal
+     * crafting menu). Taken for vanilla's alone, no bot ever saw a table at the base, and each craft
+     * put down another.
+     */
+    public static boolean craftingTable(net.minecraft.world.level.block.state.BlockState s) {
+        return s.getBlock() instanceof net.minecraft.world.level.block.CraftingTableBlock
+                || net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(s.getBlock()).getNamespace().equals("visualworkbench");
+    }
+
     public static boolean loaded(BlockPos pos) {
         ClientLevel l = level();
         return l != null && l.isLoaded(pos) && pos.getY() >= l.getMinBuildHeight() && pos.getY() < l.getMaxBuildHeight();

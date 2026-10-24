@@ -21,7 +21,6 @@ import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.ShapedRecipe;
-import net.minecraft.world.level.block.CraftingTableBlock;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -236,7 +235,7 @@ public class CraftTask extends Task {
             if (known.isEmpty()) return false;
             BlockPos p = known.get().at.pos();
             // out of loaded range we can't tell; go and see (OPEN gives up on one that isn't there)
-            if (!WorldView.loaded(p) || WorldView.state(p).getBlock() instanceof CraftingTableBlock) {
+            if (!WorldView.loaded(p) || WorldView.craftingTable(WorldView.state(p))) {
                 tablePos = p;
                 phase = Phase.OPEN;
                 ticks = 0;
@@ -265,7 +264,7 @@ public class CraftTask extends Task {
         if (useKnownTable(bot, me, 16)) return Status.RUNNING;
         // a table standing right here at our own base (a teammate's): use it rather than place another
         for (BlockPos p : BlockPos.betweenClosed(me.offset(-4, -2, -4), me.offset(4, 2, 4))) {
-            if (WorldView.state(p).getBlock() instanceof CraftingTableBlock && !bot.nearSomeoneElsesBuild(p) && !duds.contains(p)) {
+            if (WorldView.craftingTable(WorldView.state(p)) && !bot.nearSomeoneElsesBuild(p) && !duds.contains(p)) {
                 tablePos = p.immutable();
                 bot.memory().addStation("crafting_table", tablePos, bot.dim(), false);
                 phase = Phase.OPEN;

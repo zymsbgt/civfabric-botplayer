@@ -107,7 +107,7 @@ public final class BlockRules {
                 || s.is(ConventionalBlockTags.GLASS_BLOCKS) || s.is(ConventionalBlockTags.GLASS_PANES)
                 || s.is(ConventionalBlockTags.CHESTS) || s.is(ConventionalBlockTags.BARRELS)
                 || s.is(BlockTags.CROPS) || b instanceof FarmBlock || b instanceof TorchBlock
-                || b instanceof CraftingTableBlock || b instanceof AbstractFurnaceBlock) {
+                || WorldView.craftingTable(s) || b instanceof AbstractFurnaceBlock) {
             return true;
         }
         if (b == Blocks.COBBLESTONE || b == Blocks.STONE_BRICKS || b == Blocks.BRICKS || b == Blocks.SMOOTH_STONE) return true;
