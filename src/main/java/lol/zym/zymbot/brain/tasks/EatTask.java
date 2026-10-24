@@ -116,6 +116,8 @@ public class EatTask extends Task {
                 ticks = 0; // select next tick, once the server has the menu shut
                 return Status.RUNNING;
             }
+            // a server rule: no eating in water (the shore reflex takes us out first)
+            if (p.isInWater()) return fail("can't eat in water");
             slot = choose(bot);
             if (slot < 0) return fail("no food");
             ItemStack s = Inv.inv().getItem(slot);

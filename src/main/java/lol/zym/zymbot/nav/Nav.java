@@ -149,6 +149,18 @@ public final class Nav {
     }
 
     /** Where Baritone is trying to get to, when its goal is a place (not "away from" or a column). */
+    /** The first block of water on the path we're walking, within the next {@code steps} steps, or null. */
+    public static BlockPos waterAhead(int steps) {
+        var ex = baritone().getPathingBehavior().getCurrent();
+        if (ex == null) return null;
+        var path = ex.getPath().positions();
+        int at = Math.max(0, ex.getPosition());
+        for (int i = at; i < Math.min(path.size(), at + steps); i++) {
+            if (lol.zym.zymbot.world.WorldView.water(path.get(i))) return path.get(i);
+        }
+        return null;
+    }
+
     public static BlockPos goalPos() {
         Goal g = baritone().getPathingBehavior().getGoal();
         if (g == null) g = lastGoal;

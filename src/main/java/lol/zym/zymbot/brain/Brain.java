@@ -617,7 +617,7 @@ public final class Brain {
     private static int priority(String kind) {
         if (kind == null) return -1;
         return switch (kind) {
-            case "air" -> 6;
+            case "air", "snack" -> 6;
             case "flee", "bed" -> 5;
             case "fight" -> 4;
             case "eat", "shore", "shelter" -> 3;
@@ -759,6 +759,27 @@ public final class Brain {
         return true;
     }
 
+    /** Where the path ahead goes into water, while we eat up before it (for the event). */
+    private net.minecraft.core.BlockPos snackFor;
+
+    /**
+     * About to wade or swim in: eat up first, since the server allows no eating in water. Chased,
+     * only a bite with the hunter still well back and too hungry to sprint; otherwise straight in.
+     */
+    private String snackBeforeWater(Bot bot) {
+        var p = bot.player();
+        if (p.isInWater() || bot.ticks() % 10 != 0 && !"snack".equals(reflexKind)) return null;
+        if ("snack".equals(reflexKind)) return "snack";
+        int food = p.getFoodData().getFoodLevel();
+        if (food > 17 || EatTask.choose(bot) < 0) return null;
+        net.minecraft.core.BlockPos wet = Nav.waterAhead(6);
+        if (wet == null) return null;
+        List<LivingEntity> after = threats(bot);
+        if (!after.isEmpty() && (food > 6 || after.get(0).distanceTo(p) < 12)) return null;
+        snackFor = wet;
+        return "snack";
+    }
+
     private String wantedReflex(Bot bot) {
         var p = bot.player();
         BotConfig cfg = BotConfig.get();
@@ -766,6 +787,8 @@ public final class Brain {
         // diving for our own grave needs the breath: surface at a third, not at four fifths
         double airFloor = "grave".equals(reflexKind) ? 0.35 : 0.8;
         if (p.isUnderWater() && p.getAirSupply() < p.getMaxAirSupply() * airFloor) return "air";
+        String snack = snackBeforeWater(bot);
+        if (snack != null) return snack;
         String defence = defend(bot);
         if (defence != null) return defence;
         // out of deep water before anything slow (eating, a grave in the water is the exception)
@@ -779,9 +802,15 @@ public final class Brain {
         // eat when something fits the gap (or we're down to the floor); where health regenerates
         // from a full bar, topping up while hurt is worth the spill
         boolean regen = bot.health().naturalRegen(bot);
-        if ((!wet || food <= 3) && (food <= 14 && EatTask.fitsNow(bot) || food <= EatTask.MUST_EAT
-                || regen && food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0) return "eat";
-        if (!wet && hurtForGood && EatTask.chooseHealing(bot) >= 0) return "eat";
+        boolean hungry = (food <= 14 && EatTask.fitsNow(bot) || food <= EatTask.MUST_EAT
+                || regen && food < 20 && p.getHealth() < p.getMaxHealth() - 6) && EatTask.choose(bot) >= 0;
+        if (hungry || hurtForGood && EatTask.chooseHealing(bot) >= 0) {
+            // the server won't let anyone eat in water, shallow or deep (2026-10-24): Bot5 stood in
+            // a river ankle-deep, chewing every food it had for minutes. Dry ground first
+            if (!p.isInWater()) return "eat";
+            if (System.currentTimeMillis() > noShoreUntil && !Set.of("air", "unstuck", "grave").contains(String.valueOf(reflexKind)))
+                return "shore";
+        }
         // a blood moon: every mob is after us until dawn. Dig in, ahead of foraging, graves and
         // errands (all of which mean walking about in the dark). CivFabric's night watch lets all but
         // one of us sleep instead (the night isn't skipped), and a warm bed mends us: worth it when
@@ -906,6 +935,10 @@ public final class Brain {
                 yield new FightTask(threat(bot));
             }
             case "eat" -> new EatTask();
+            case "snack" -> {
+                bot.event("eating before going into the water at " + snackFor.toShortString() + " (no eating once we're in)");
+                yield new EatTask();
+            }
             case "grave" -> new RecoverGraveTask(bot.pendingGrave());
             case "shelter" -> {
                 bot.event((bot.pacifism().bloodMoon() ? "blood moon" + (bot.pacifism().superBloodMoon() ? " (super)" : "")
@@ -924,7 +957,8 @@ public final class Brain {
                 yield new UnstuckTask();
             }
             case "shore" -> {
-                bot.event("in deep water; heading for shore");
+                bot.event(WorldView.deepWater(bot.player().blockPosition()) ? "in deep water; heading for shore"
+                        : "hungry, and there's no eating in water: heading for dry ground");
                 yield new ShoreTask();
             }
             case "unstuck" -> {
