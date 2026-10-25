@@ -42,6 +42,8 @@ public class ShelterTask extends Task {
     private final Set<BlockPos> bad = new HashSet<>();
     private int phaseTicks;
     private BlockPos digging;
+    private boolean shoreTried;
+    private int walkLimit = 20 * 30;
     private boolean danger(Bot bot) {
         return bot.pacifism().bloodMoon() || stormNight(bot) || bot.brain().hideNight(bot);
     }
@@ -105,17 +107,30 @@ public class ShelterTask extends Task {
                 } else if (phaseTicks % 40 == 1) Nav.goNear(b, 4);
             }
             case PICK -> {
-                spot = pickSpot(p.blockPosition());
+                spot = pickSpot(p.blockPosition(), 8);
+                // caught by a river (water, sand and gravel all round): holding there walked us back
+                // in towards the base, out of air, and starting over every few seconds (Bot1, a super
+                // moon). Dig in on firmer ground further off, swimming to shore first if none is in sight
+                if (spot == null) spot = pickSpot(p.blockPosition(), 24);
+                if (spot == null && p.isInWater() && !shoreTried) {
+                    shoreTried = true;
+                    bot.event(why(bot) + ": in the water, nowhere to dig in; heading for shore");
+                    setChild(bot, new ShoreTask());
+                    break;
+                }
                 if (spot == null) {
                     bot.event(why(bot) + ": nowhere to dig in here; staying by the base");
                     to(Phase.HOLD);
-                } else to(Phase.WALK);
+                } else {
+                    walkLimit = 20 * (30 + (int) Math.sqrt(spot.distSqr(p.blockPosition())));
+                    to(Phase.WALK);
+                }
             }
             case WALK -> {
                 if (p.blockPosition().equals(spot) && p.onGround()) {
                     Nav.stop();
                     to(Phase.DIG);
-                } else if (phaseTicks > 20 * 30) {
+                } else if (phaseTicks > walkLimit) {
                     bad.add(spot);
                     to(Phase.PICK);
                 } else if (phaseTicks % 20 == 1) Nav.goTo(new baritone.api.pathing.goals.GoalBlock(spot));
@@ -216,16 +231,20 @@ public class ShelterTask extends Task {
     }
 
     /**
-     * Plain ground near us that a pit can go into: three diggable blocks under a clear standing spot,
+     * Plain ground near us that a pit can go into: three diggable blocks under a clear, dry standing spot,
      * solid all round them (no water or air pockets), something solid under the bottom, and nothing
      * of ours or the farm's in the way.
      */
-    private BlockPos pickSpot(BlockPos from) {
+    private BlockPos pickSpot(BlockPos from, int r) {
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
-        for (BlockPos c : BlockPos.betweenClosed(from.offset(-8, -3, -8), from.offset(8, 3, 8))) {
+        // a river bed sits a few blocks below its banks
+        int dy = r > 8 ? 5 : 3;
+        for (BlockPos c : BlockPos.betweenClosed(from.offset(-r, -dy, -r), from.offset(r, dy, r))) {
             BlockPos s = c.immutable();
             if (bad.contains(s) || !WorldView.standable(s)) continue;
+            // standable counts a lake bed: a pit there floods, and walking out to it drowned us
+            if (WorldView.water(s) || WorldView.water(s.above())) continue;
             if (!fits(s)) continue;
             double d = s.distSqr(from);
             if (d < bestD) {
