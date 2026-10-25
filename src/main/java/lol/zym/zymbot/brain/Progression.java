@@ -593,6 +593,10 @@ public final class Progression {
      * if we have some of every meat.
      */
     static Task food(Bot bot) {
+        // food the team put by beats a hunt: Bot1 and Bot4 went after rabbits and cows at 1 HP with
+        // cooked chicken in a chest at the base
+        Task fetch = foodFromChest(bot);
+        if (fetch != null) return fetch;
         Item[] meats = {Items.BEEF, Items.PORKCHOP, Items.MUTTON, Items.CHICKEN, Items.RABBIT};
         Item[] cooked = {Items.COOKED_BEEF, Items.COOKED_PORKCHOP, Items.COOKED_MUTTON, Items.COOKED_CHICKEN, Items.COOKED_RABBIT};
         EntityType<?>[] from = {EntityType.COW, EntityType.PIG, EntityType.SHEEP, EntityType.CHICKEN, EntityType.RABBIT};
@@ -631,6 +635,43 @@ public final class Progression {
             return Inv.isFood(s) && !Inv.riskyFood(s);
         };
         return new HuntTask(want, eats, Inv.count(eats) + 4).orPokemon();
+    }
+
+    /** Fetch the most filling pile of safe food from the nearest chest of ours within 96 blocks, or null. */
+    private static Task foodFromChest(Bot bot) {
+        net.minecraft.core.BlockPos me = bot.player().blockPosition();
+        lol.zym.zymbot.memory.BotMemory.ChestRecord best = null;
+        Item bestItem = null;
+        int bestCount = 0;
+        double bestD = 96 * 96;
+        for (var r : bot.memory().chests.values()) {
+            if (r.at == null || !java.util.Objects.equals(r.at.dim, bot.dim()) || !lol.zym.zymbot.memory.ChestIndex.takeable(r)) continue;
+            double d = r.at.pos().distSqr(me);
+            if (d > bestD) continue;
+            Item pick = null;
+            int pickCount = 0, pickValue = 0;
+            for (var e : r.items.entrySet()) {
+                var id = net.minecraft.resources.ResourceLocation.tryParse(lol.zym.zymbot.memory.ChestIndex.fullId(e.getKey()));
+                if (id == null || e.getValue() <= 0 || !net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(id)) continue;
+                Item it = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(id);
+                ItemStack st = new ItemStack(it);
+                if (!Inv.isFood(st) || Inv.riskyFood(st)) continue;
+                int value = Inv.food(st).nutrition() * Math.min(e.getValue(), 4);
+                if (value > pickValue) {
+                    pick = it;
+                    pickCount = e.getValue();
+                    pickValue = value;
+                }
+            }
+            if (pick == null) continue;
+            best = r;
+            bestItem = pick;
+            bestCount = pickCount;
+            bestD = d;
+        }
+        if (best == null) return null;
+        bot.event("hungry: fetching " + Inv.id(bestItem).replace("minecraft:", "") + " from the chest at " + best.at.pos().toShortString());
+        return new FetchTask(best.at.pos(), ItemTarget.of(bestItem, Inv.count(bestItem) + Math.min(bestCount, 4)));
     }
 
     private static final List<String> BASICS = List.of("crafting_table", "wooden_pickaxe", "food_stock", "furnace");

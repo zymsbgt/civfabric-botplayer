@@ -491,6 +491,9 @@ public final class Commands {
                 case "campfire", "warmbed" -> {
                     if (bot.memory().bed == null) return "no bed yet: settle first";
                 }
+                case "feed" -> {
+                    if (a.length > 1 && build(bot, from, a) == null) return "no food to spare";
+                }
                 case "heal", "treat" -> {
                     String who = a.length > 1 ? a[1] : from;
                     if (build(bot, from, a) == null) return ClassPlan.isMedic(bot) ? "nothing to heal " + who + " with"

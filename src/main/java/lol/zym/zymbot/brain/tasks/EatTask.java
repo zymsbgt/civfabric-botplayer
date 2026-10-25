@@ -78,6 +78,11 @@ public class EatTask extends Task {
             FoodProperties f = Inv.food(s);
             if (f == null) continue;
             if (Inv.riskyFood(s) && !starving) continue;
+            // poison can't kill, but it stops at 1 HP and leaves us to die to the next hit: a starving
+            // Bot4 ate a pufferfish at 8 HP and went out hunting at 1. Only what we can take, unless
+            // the bar is empty and starving would kill us instead
+            double poison = poisonDamage(f);
+            if (poison > 0 && food > 0 && bot.player().getHealth() - poison < 6) continue;
             String id = Inv.id(s.getItem());
             if (WONT_EAT.getOrDefault(id, 0L) > System.currentTimeMillis() && !starving) continue;
             // what it restores after Spice of Fabric's repeats, and how long it takes to get it
@@ -92,14 +97,37 @@ public class EatTask extends Task {
             double newFood = Math.min(20, food + value);
             double sat = Math.min(f.saturation(), Math.max(0, newFood - bot.player().getFoodData().getSaturationLevel()));
             Double pack = plan.get(id);
-            // a risky food (starving) only after every safe one: it's in no plan
-            double score = pack == null ? -1000 + value : pack + sat * 0.5 - (value - hunger) * 1.5;
+            // a risky food (starving) only after every safe one: it's in no plan. Among them the least
+            // harmful first, not the most filling: rotten flesh's hunger over a spider eye's poison
+            double score = pack == null ? -1000 + value - 2 * poison - hungerLoss(f) : pack + sat * 0.5 - (value - hunger) * 1.5;
             if (score > bestScore) {
                 bestScore = score;
                 best = i;
             }
         }
         return best;
+    }
+
+    /** Health a food's poison would take, on average (Poison I: 1 per 25 ticks, twice as often per level). */
+    static double poisonDamage(FoodProperties f) {
+        double d = 0;
+        for (var e : f.effects()) {
+            var in = e.effect();
+            if (!in.getEffect().equals(net.minecraft.world.effect.MobEffects.POISON)) continue;
+            d += e.probability() * in.getDuration() / (double) Math.max(1, 25 >> in.getAmplifier());
+        }
+        return d;
+    }
+
+    /** Food points a food's Hunger effect would burn, on average (0.005 exhaustion a tick per level; 4 a point). */
+    static double hungerLoss(FoodProperties f) {
+        double d = 0;
+        for (var e : f.effects()) {
+            var in = e.effect();
+            if (!in.getEffect().equals(net.minecraft.world.effect.MobEffects.HUNGER)) continue;
+            d += e.probability() * 0.005 * (in.getAmplifier() + 1) * in.getDuration() / 4.0;
+        }
+        return d;
     }
 
     @Override
