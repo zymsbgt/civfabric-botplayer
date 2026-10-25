@@ -175,6 +175,8 @@ public class ObtainTask extends Task {
     }
 
     private Task gatherStep(Bot bot, Planner.Method m, List<Planner.Method> peers, int missing) {
+        if (m.blocks().stream().allMatch(b -> lol.zym.zymbot.craft.Sources.apricorn(b.defaultBlockState())))
+            return new PickApricornsTask(m.blocks(), target.match(), target.have() + missing);
         // need a tool first?
         var state = m.blocks().get(0).defaultBlockState();
         boolean anyHarvestable = m.blocks().stream().anyMatch(b -> Inv.canHarvest(b.defaultBlockState()));

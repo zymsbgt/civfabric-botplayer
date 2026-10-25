@@ -77,7 +77,30 @@ public final class Sources {
             if (b == Blocks.OAK_LEAVES || b == Blocks.DARK_OAK_LEAVES)
                 idx.computeIfAbsent(Items.APPLE, k -> new ArrayList<>()).add(b);
         }
+        // Cobblemon's apricorns hang off apricorn leaves and are picked, not mined (PickApricornsTask).
+        // They stay off the natural list so Baritone never breaks one on its way past
+        for (Block b : BuiltInRegistries.BLOCK) {
+            if (!apricorn(b.defaultBlockState())) continue;
+            ResourceLocation id = BuiltInRegistries.BLOCK.getKey(b);
+            if (BuiltInRegistries.ITEM.containsKey(id))
+                idx.computeIfAbsent(BuiltInRegistries.ITEM.get(id), k -> new ArrayList<>()).add(b);
+        }
         blockIndex = idx;
+    }
+
+    /** A Cobblemon apricorn on its tree ("cobblemon:red_apricorn"), ripe or not. */
+    public static boolean apricorn(BlockState s) {
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(s.getBlock());
+        return id.getNamespace().equals("cobblemon") && id.getPath().endsWith("_apricorn");
+    }
+
+    /** Grown to its last age, so a pick gives fruit; an unripe one gives nothing. */
+    public static boolean ripe(BlockState s) {
+        for (var prop : s.getProperties()) {
+            if (prop.getName().equals("age") && prop instanceof net.minecraft.world.level.block.state.properties.IntegerProperty ip)
+                return s.getValue(ip) >= java.util.Collections.max(ip.getPossibleValues());
+        }
+        return true;
     }
 
     private static Map<Block, List<Item>> modLoot;
