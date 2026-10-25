@@ -101,6 +101,11 @@ public class BoardJobTask extends Task {
         return postId;
     }
 
+    /** The item the post asks for ("cobblemon:poke_ball"). */
+    public String postItem() {
+        return Inv.id(item.candidates().get(0));
+    }
+
     @Override
     public String name() {
         return "Board " + boardName + " #" + postId + ": " + delivered + "/" + item + " → " + deliverTo + " (" + (phase == null ? "done" : phase.name().toLowerCase()) + ")";

@@ -70,6 +70,12 @@ public final class Brain {
     private long boardMadeAt;
     /** Posts we recently failed at, so we don't claim them straight back: post id -> retry time. */
     private final java.util.Map<String, Long> skipPosts = new java.util.HashMap<>();
+    /**
+     * Items whose posts we recently failed at: item id -> retry time. Each bot posts its own ask, so
+     * one item can stand on the board five times over: skipping only the post we failed had us claim
+     * the next (five bots round five Poké Ball posts, a failure every 10 s, apricorns unknown).
+     */
+    private final java.util.Map<String, Long> skipItems = new java.util.HashMap<>();
 
     public Progression progression() {
         return progression;
@@ -79,6 +85,15 @@ public final class Brain {
 
     /** Give the bot a job. {@code repeatCmd} (a command line) is re-run each time it succeeds. */
     public void assign(Task task, String source, String repeatCmd) {
+        // a handoff (feed, give, bring) cuts in: what we were on waits as an errand and comes back
+        // once it's done. Bot1's base tidy was lost to a "feed Bot4" and never taken up again
+        if (task instanceof GiveTask && job != null && !(job instanceof GiveTask)) {
+            Bot bot = Bot.get();
+            bot.event("setting \"" + job.name() + "\" aside for " + task.name());
+            errands.add(new Errand(job, jobSource, this.repeatCmd, null, 0, System.currentTimeMillis() + 60 * 60_000L, JOB_PRIORITY));
+            job.stop(bot);
+            job = null;
+        }
         clearJob();
         job = task;
         jobSource = source;
@@ -135,7 +150,7 @@ public final class Brain {
             }
             case JOB -> {
                 if (job == null) break;
-                if (job instanceof BoardJobTask b) skipPosts.put(b.postId(), System.currentTimeMillis() + 30 * 60_000L);
+                if (job instanceof BoardJobTask b) skipPost(b, 30 * 60_000L, why);
                 bot.reply(jobSource, "job failed: " + why);
                 clearJob();
             }
@@ -249,7 +264,7 @@ public final class Brain {
             }
             if (s != Task.Status.RUNNING) {
                 String result = s == Task.Status.SUCCESS ? "done: " + job.name() : "failed: " + job.failureReason();
-                if (s == Task.Status.FAILURE && job instanceof BoardJobTask b) skipPosts.put(b.postId(), System.currentTimeMillis() + 10 * 60_000L);
+                if (s == Task.Status.FAILURE && job instanceof BoardJobTask b) skipPost(b, 10 * 60_000L, job.failureReason());
                 bot.event("job " + result);
                 bot.reply(jobSource, "job " + result);
                 if (repeatCmd != null && s == Task.Status.SUCCESS) {
@@ -260,6 +275,8 @@ public final class Brain {
                     job.stop(bot);
                     job = null;
                     jobSource = null;
+                    // a job set aside for this one goes on now, before a board post can take the slot
+                    if (!errands.isEmpty()) checkErrands(bot);
                 }
             }
             return;
@@ -396,6 +413,7 @@ public final class Brain {
                 if (!"open".equals(post.get("status").getAsString())) continue;
                 if (bot.name().equals(post.get("by").getAsString())) continue;
                 if (skipPosts.getOrDefault(post.get("id").getAsString(), 0L) > System.currentTimeMillis()) continue;
+                if (skipItems.getOrDefault(post.get("item").getAsString(), 0L) > System.currentTimeMillis()) continue;
                 int open = post.has("open") ? post.get("open").getAsInt() : post.get("count").getAsInt() - post.get("delivered").getAsInt();
                 if (open <= 0) continue;
                 // for a teammate bot that has wandered out of radio range: we couldn't hand it over
@@ -442,6 +460,17 @@ public final class Brain {
                 return;
             }
         }
+    }
+
+    /**
+     * Leave a failed post, and every other post for its item, alone for a while. Not knowing any way
+     * to get it won't change by itself in ten minutes, so that one waits half an hour.
+     */
+    private void skipPost(BoardJobTask b, long ms, String why) {
+        long now = System.currentTimeMillis();
+        if (why != null && why.contains("no known way")) ms = Math.max(ms, 30 * 60_000L);
+        skipPosts.put(b.postId(), now + ms);
+        skipItems.put(b.postItem(), now + ms);
     }
 
     /** Stuck on something (often a CivFabric class gate): ask teammates via the nearest board. */
