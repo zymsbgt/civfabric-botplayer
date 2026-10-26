@@ -1007,6 +1007,17 @@ public final class Bot {
      * Leave the spot and whatever we were heading for (blacklisted half an hour, so a search picks
      * another), drop the task, and ask for help. Moving on by ourselves takes the request back.
      */
+    /**
+     * Following someone who's standing about: we stand with them. ZymSB stopped to sort out
+     * Wandersong's tools, and two minutes later it gave up following and asked for help.
+     */
+    private boolean followingClose(String task, BlockPos here) {
+        var m = java.util.regex.Pattern.compile("Follow ([A-Za-z0-9_]{3,16})").matcher(task);
+        if (!m.find()) return false;
+        Player p = findPlayer(m.group(1));
+        return p != null && p.blockPosition().closerThan(here, 8);
+    }
+
     private void checkStill() {
         BlockPos here = player().blockPosition();
         long now = System.currentTimeMillis();
@@ -1020,7 +1031,7 @@ public final class Bot {
         boolean stays = !enabled || player().isSleeping() || task.equals("[idle] nothing")
                 || java.util.stream.Stream.of("Farm", "Fish", "Smelt", "Rest", "Sleep", "Shelter", "Receive", "Craft", "Home for the night", "Catch")
                         .anyMatch(task::contains)
-                || task.endsWith("(wait)");
+                || task.endsWith("(wait)") || followingClose(task, here);
         if (stays || stillAt == null || !stillAt.closerThan(here, 4)) {
             stillAt = stays ? null : here;
             stillSince = now;
@@ -1090,6 +1101,14 @@ public final class Bot {
      */
     public boolean wilderness() {
         return builtNearby < 8;
+    }
+
+    /** Inside the no-break zone (the "nobreak" command), {@code margin} blocks wider. */
+    public boolean inNoBreakZone(BlockPos pos, int margin) {
+        var z = memory.noBreakAt;
+        if (z == null || pos == null || !z.dim.equals(dim())) return false;
+        double r = memory.noBreakRadius + margin, dx = pos.getX() - z.pos().getX(), dz = pos.getZ() - z.pos().getZ();
+        return dx * dx + dz * dz <= r * r;
     }
 
     /** Someone's build within {@code r} of here (ours excepted): for checks while mining. */

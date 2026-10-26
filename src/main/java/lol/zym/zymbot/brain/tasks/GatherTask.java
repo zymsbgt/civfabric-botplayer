@@ -243,7 +243,7 @@ public class GatherTask extends Task {
             BlockState s = WorldView.state(p);
             if (!BlockRules.natural(s) || !WorldView.exposed(p) || cavesIn(p, s) || overWater(p)) continue;
             if (!bot.civ().canMine(bot.memory(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).toString())) continue;
-            if (bot.nearSomeoneElsesBuild(p)) continue;
+            if (bot.nearSomeoneElsesBuild(p) || bot.inNoBreakZone(p, 0)) continue;
             if (outOfReachAboveGround(p)) continue;
             target = p;
             targetTicks = 0;
@@ -280,6 +280,8 @@ public class GatherTask extends Task {
     /** Hand the whole job to Baritone's #mine? Only natural bulk blocks, and only out in the wild. */
     private boolean bulk(Bot bot) {
         if (careful) return false;
+        // Baritone's mine picks its own blocks, and would take them in the no-break zone too
+        if (bot.inNoBreakZone(bot.player().blockPosition(), BotConfig.get().searchRadius)) return false;
         String mode = BotConfig.get().gatherMode;
         if ("baritone-mine".equalsIgnoreCase(mode)) return true;
         if (!"auto".equalsIgnoreCase(mode)) return false;

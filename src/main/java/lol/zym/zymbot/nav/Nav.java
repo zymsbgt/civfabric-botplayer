@@ -107,7 +107,7 @@ public final class Nav {
         IBaritone b = baritone();
         if (goal.equals(lastGoal) && b.getCustomGoalProcess().isActive()) return;
         lastGoal = goal;
-        breakPenalty(BotConfig.get().travelBreakPenalty);
+        breakPenalty(travelPenalty(goal instanceof baritone.api.utils.interfaces.IGoalRenderPos r ? r.getGoalPos() : null));
         b.getCustomGoalProcess().setGoalAndPath(goal);
     }
 
@@ -121,6 +121,15 @@ public final class Nav {
      * Travelling, walk round rather than dig through: ZymSB asked that bots heading somewhere don't
      * break blocks on the way. Mining a block, the digging to it is the job, so it keeps the default.
      */
+    /** A break in the no-break zone costs as much as a long walk round: a last resort, when boxed in. */
+    private static final double NO_BREAK_ZONE_PENALTY = 1000;
+
+    private static double travelPenalty(BlockPos goal) {
+        var bot = lol.zym.zymbot.Bot.get();
+        if (bot != null && (bot.inNoBreakZone(bot.player().blockPosition(), 0) || bot.inNoBreakZone(goal, 0))) return NO_BREAK_ZONE_PENALTY;
+        return BotConfig.get().travelBreakPenalty;
+    }
+
     private static void breakPenalty(double p) {
         BaritoneAPI.getSettings().blockBreakAdditionalPenalty.value = p;
     }
@@ -143,7 +152,7 @@ public final class Nav {
     }
 
     public static void follow(UUID player) {
-        breakPenalty(BotConfig.get().travelBreakPenalty);
+        breakPenalty(travelPenalty(null));
         baritone().getFollowProcess().follow(e -> e.getUUID().equals(player));
     }
 

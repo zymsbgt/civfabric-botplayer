@@ -110,6 +110,13 @@ public final class BotMemory {
     /** A campfire sits by our bed, so resting in it heals (CivFabric warmth). */
     public boolean bedWarm;
     public Pos home;
+    /**
+     * Keep our hands off everything within {@code noBreakRadius} of here: a base we share with
+     * players, where even the dirt and logs are theirs (ZymSB: "try not to break anything around
+     * base"). No gathering inside, and travel there breaks a block only when there's no way round.
+     */
+    public Pos noBreakAt;
+    public int noBreakRadius;
     /** The team's bases by name ("main", "wheat_plains"...). Only a leader or Claude adds or moves them. */
     public Map<String, TeamHome> teamHomes = new LinkedHashMap<>();
     /** Which base this bot belongs to; it stays within radio range of it. */

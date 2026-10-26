@@ -71,6 +71,9 @@ public final class ChatListener {
     static String[] split(String text, Bot bot) {
         List<String> names = new ArrayList<>(BotConfig.get().teammates);
         names.addAll(bot.team().knownNames());
+        // our own lines too: "Wandersong » @ZymSB sorry, …" is ours, not ZymSB's (taken for ZymSB's,
+        // the leader answered its own failure notice every 20 s)
+        names.add(bot.name());
         String lower = text.toLowerCase(Locale.ROOT);
         int bestAt = Integer.MAX_VALUE;
         String best = null;
@@ -94,7 +97,8 @@ public final class ChatListener {
         while (true) {
             int i = hay.indexOf(word, from);
             if (i < 0) return -1;
-            boolean startOk = i == 0 || !Character.isLetterOrDigit(hay.charAt(i - 1)) && hay.charAt(i - 1) != '_';
+            // "@ZymSB" names who's spoken to, never who's speaking
+            boolean startOk = i == 0 || !Character.isLetterOrDigit(hay.charAt(i - 1)) && hay.charAt(i - 1) != '_' && hay.charAt(i - 1) != '@';
             int end = i + word.length();
             boolean endOk = end >= hay.length() || !Character.isLetterOrDigit(hay.charAt(end)) && hay.charAt(end) != '_';
             if (startOk && endOk) return i;
