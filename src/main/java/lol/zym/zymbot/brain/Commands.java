@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "explore", "farm", "crops", "catch", "sleep", "findbed", "fillhole", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "dinner", "meals", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "survey", "dinner", "meals", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -59,6 +59,7 @@ public final class Commands {
             "meals (what I could cook from what we have, and what each gains) | dinner [player] (I have food: every hungry bot that hears it comes to me, or that player, to be fed, for 3 minutes)",
             "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | chests (the chest index) | level [class]",
             "checkchest [player | x y z] (go and look in the chest by whoever asked, or by that player, or at x y z)",
+            "survey (note the crafting tables and furnaces within 24 blocks and look in every chest there not yet indexed)",
             "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z",
             "teamhome | teamhome set <name> [x y z] [purpose] | assign <name> | remove <name>  (leaders only: the team's bases)",
             "say <text> | tell <bot|all> <command>  (bots within 150 blocks only)",
@@ -592,6 +593,9 @@ public final class Commands {
                 BlockPos at = p != null ? p.blockPosition() : bot.lastKnownPosition(who);
                 // nowhere in sight or radio range: where they were last seen, asking teammates on the way
                 return at == null ? new SeekTask(who, 3) : new GoToTask(at, 2);
+            }
+            case "survey", "lookaround" -> {
+                return new lol.zym.zymbot.brain.tasks.SurveyTask();
             }
             case "checkchest", "lookin" -> {
                 // see what's in a chest now: at x y z, else the one by a player (who asked, or named),
