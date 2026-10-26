@@ -66,6 +66,9 @@ public final class Bot {
     private long lastHealedAt = -10_000;
     /** A teammate is handing us something until this tick: hold still and pick it up. */
     private long receiveUntil;
+    /** A player who called us over to be fed ("dinner"), and the tick the offer runs out. */
+    private String foodOffer;
+    private long foodOfferUntil;
     private final Brain brain = new Brain();
     private final TeamBus team;
     private final Random random = new Random();
@@ -156,6 +159,22 @@ public final class Bot {
 
     public boolean receiving() {
         return tick < receiveUntil;
+    }
+
+    /** {@code player} has food for us: for the next {@code seconds}, hunger brings us to them first. */
+    public void offerFood(String player, int seconds) {
+        foodOffer = player;
+        foodOfferUntil = tick + seconds * 20L;
+    }
+
+    /** Who's offering us food just now, or null. */
+    public String foodOffer() {
+        return tick < foodOfferUntil ? foodOffer : null;
+    }
+
+    public void clearFoodOffer() {
+        foodOffer = null;
+        foodOfferUntil = 0;
     }
 
     public long lastHealedAt() {
@@ -699,6 +718,7 @@ public final class Bot {
         tick++;
 
         if (tick % 40 == 0) publishState();
+        if (tick % 20 == 0) lol.zym.zymbot.chat.LeaderChat.tick(this);
         // the server's count of our ticks out of bed, for the phantom threshold: it only sends it when asked.
         // Paused too: a paused bot is awake all the same
         if (tick % 6000 == 20) p.connection.send(new net.minecraft.network.protocol.game.ServerboundClientCommandPacket(

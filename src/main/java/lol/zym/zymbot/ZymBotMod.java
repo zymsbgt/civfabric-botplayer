@@ -162,7 +162,19 @@ public final class ZymBotMod implements ClientModInitializer {
         if (reconnectAt == 0 || System.currentTimeMillis() < reconnectAt || lastServer == null) return;
         if (!(mc.screen instanceof DisconnectedScreen || mc.screen instanceof TitleScreen)) return;
         reconnectAt = 0;
+        // someone else logged in on this account (a lent one: a player using it): going back would
+        // throw them off, and then they us
+        if (mc.screen instanceof DisconnectedScreen s && duplicateLogin(((lol.zym.zymbot.mixin.DisconnectedScreenAccessor) s).zymbot$details().reason())) {
+            LOG.info("Not reconnecting to {}: this account logged in from another location", lastServer.ip);
+            return;
+        }
         LOG.info("Reconnecting to {}", lastServer.ip);
         ConnectScreen.startConnecting(new TitleScreen(), mc, ServerAddress.parseString(lastServer.ip), lastServer, false, null);
+    }
+
+    /** Vanilla's kick for a second login on the account, or a proxy's plain-text copy of it. */
+    private static boolean duplicateLogin(Component reason) {
+        if (reason.getContents() instanceof TranslatableContents t && t.getKey().equals("multiplayer.disconnect.duplicate_login")) return true;
+        return reason.getString().toLowerCase(Locale.ROOT).contains("logged in from another location");
     }
 }

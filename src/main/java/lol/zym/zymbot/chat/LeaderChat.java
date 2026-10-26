@@ -16,6 +16,10 @@ import java.util.regex.Pattern;
  * the leader puts the line in its published state ({@code chat_to_claude}), the hub raises it as a
  * "chat" alert, and the Claude session watching the alerts answers through the leader: a
  * {@code say @<player> ...} and the commands the player asked for.
+ *
+ * <p>The leader says "one moment" only once the hub reports that the watcher picked the line up
+ * ({@link lol.zym.zymbot.team.TeamBus#chatRead}); with no word of it within {@link #ANSWER_MS}, it
+ * tells the player the line didn't get through (nobody is watching, or the hub is down).
  */
 public final class LeaderChat {
     private LeaderChat() {}
@@ -24,7 +28,12 @@ public final class LeaderChat {
     private static final long KEEP_MS = 10 * 60_000;
     private static final int KEEP = 10;
 
-    private record Heard(String id, String from, String text, JsonObject pos, long at) {}
+    /** How long Claude's watcher gets to pick a line up before we tell the player it didn't get through. */
+    private static final long ANSWER_MS = 20_000;
+
+    private record Heard(String id, String from, String text, JsonObject pos, long at, boolean[] told) {
+        // told[0]: said "one moment" (Claude has it); told[1]: said it didn't get through
+    }
 
     /** Only touched on the client thread. */
     private static final ArrayDeque<Heard> heard = new ArrayDeque<>();
@@ -32,9 +41,9 @@ public final class LeaderChat {
     /** The bot the lines above were heard by: a new session starts them over. */
     private static Bot owner;
 
-    /** On for leaders only: workers leave players' chat to the leader. Needs the hub, to reach Claude. */
+    /** On for leaders only: workers leave players' chat to the leader. */
     public static boolean enabled(Bot bot) {
-        return BotConfig.get().chatToClaude && bot.role() == Bot.Role.LEADER && bot.team().connected();
+        return BotConfig.get().chatToClaude && bot.role() == Bot.Role.LEADER;
     }
 
     /**
@@ -52,6 +61,12 @@ public final class LeaderChat {
             return false;
         // the same line can arrive as both chat and system text; take it once
         if (!bot.team().markSeen("nl:" + sender + ":" + text + ":" + System.currentTimeMillis() / 2000)) return true;
+        if (!bot.team().connected()) {
+            // no hub, so no Claude: a line that is still a command goes to the command path
+            if (Commands.address(text, bot.name(), bot.team().knownNames()) != null) return false;
+            bot.chat("@" + sender + " I can't reach Claude right now (no hub link), so that didn't get through. zb commands still work.");
+            return true;
+        }
 
         String key = sender.toLowerCase(Locale.ROOT);
         long now = System.currentTimeMillis();
@@ -71,11 +86,27 @@ public final class LeaderChat {
             pos.addProperty("y", p.blockPosition().getY());
             pos.addProperty("z", p.blockPosition().getZ());
         }
-        heard.addLast(new Heard(sender + "-" + Long.toString(now, 36), sender, text, pos, now));
+        heard.addLast(new Heard(sender + "-" + Long.toString(now, 36), sender, text, pos, now, new boolean[2]));
         while (heard.size() > KEEP) heard.removeFirst();
         bot.event(sender + " (chat for Claude): " + text);
-        bot.chat("@" + sender + " one moment…");
         return true;
+    }
+
+    /** Tell each player whether Claude got their line: "one moment" once it has, a failure once it's late. */
+    public static void tick(Bot bot) {
+        if (owner != bot) return;
+        long now = System.currentTimeMillis();
+        for (Heard h : heard) {
+            if (h.told()[0]) continue;
+            if (bot.team().chatRead(h.id())) {
+                h.told()[0] = true;
+                bot.chat("@" + h.from() + (h.told()[1] ? " got it after all, one moment…" : " one moment…"));
+            } else if (!h.told()[1] && now - h.at() > ANSWER_MS) {
+                h.told()[1] = true;
+                bot.event("Claude didn't pick up " + h.from() + "'s line in " + ANSWER_MS / 1000 + "s");
+                bot.chat("@" + h.from() + " sorry, that request failed (nobody's reading leader chat right now). Try again later, or use zb commands.");
+            }
+        }
     }
 
     /** Players' lines for Claude heard lately, for our published state. */

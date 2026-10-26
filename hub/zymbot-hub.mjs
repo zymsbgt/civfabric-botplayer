@@ -51,7 +51,8 @@ if (!TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
  *                 met: Set<lowercased name> (every bot a teammate has ever reported hearing),
  *                 alerts: [{seq, at, kind, name, heard_by, pos, dim, via}], learning: bool,
  *                 idle: Map<lowercased name, {kind, since, heard, alerted}> (paused or workless now),
- *                 helped: Set<"from|at"> (help requests and "chat|..." player lines already raised) }
+ *                 helped: Set<"from|at"> (help requests and "chat|..." player lines already raised),
+ *                 chatRead: Set<id> (player lines Claude's watcher has picked up) }
  */
 const servers = new Map();
 // From the clock, not 0: bots poll "messages after N" and keep N across a hub restart, so numbers
@@ -61,7 +62,7 @@ let dirty = false;
 
 function server(key) {
   key = String(key || "default");
-  if (!servers.has(key)) servers.set(key, { members: new Map(), inboxes: new Map(), boards: new Map(), met: new Set(), alerts: [], learning: true, idle: new Map(), helped: new Set() });
+  if (!servers.has(key)) servers.set(key, { members: new Map(), inboxes: new Map(), boards: new Map(), met: new Set(), alerts: [], learning: true, idle: new Map(), helped: new Set(), chatRead: new Set() });
   return servers.get(key);
 }
 
@@ -555,7 +556,9 @@ const httpServer = http.createServer(async (req, res) => {
       if (!st.name || !st.pos) return reply(400, { ok: false, error: "state needs name and pos" });
       sv.members.set(st.name, { state: st, updated: Date.now() });
       noteHeard(sv, st);
-      return reply(200, { ok: true });
+      // which of its players' lines Claude's watcher has picked up: the leader says "one moment" then
+      const read = (st.chat_to_claude || []).map((x) => x.id).filter((id) => sv.chatRead.has(id));
+      return reply(200, { ok: true, chat_read: read });
     }
     if (req.method === "GET" && url.pathname === "/inbox") {
       const after = Number(url.searchParams.get("after") || 0);
@@ -601,7 +604,14 @@ const httpServer = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/alerts") {
       // newcomers to the team, for Claude's watcher: long-polls up to `wait` seconds
       const after = Number(url.searchParams.get("after") || 0);
-      const alerts = await alertsAfter(sv, after, Number(url.searchParams.get("wait") || 0));
+      const wait = Number(url.searchParams.get("wait") || 0);
+      const alerts = await alertsAfter(sv, after, wait);
+      // a watcher (it long-polls; a first look with wait=0 only learns where the list ends) has these
+      // players' lines now: tell their leader
+      if (wait > 0) for (const a of alerts) if (a.kind === "chat" && a.id) {
+        sv.chatRead.add(a.id);
+        if (sv.chatRead.size > 200) sv.chatRead.delete(sv.chatRead.values().next().value);
+      }
       return reply(200, { ok: true, alerts, last: alerts.length ? alerts[alerts.length - 1].seq : Math.max(after, 0), learning: sv.learning });
     }
     if (req.method === "GET" && url.pathname === "/servers") return reply(200, { ok: true, servers: [...servers.keys()] });

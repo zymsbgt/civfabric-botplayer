@@ -53,12 +53,41 @@ public class GatherTask extends Task {
     /** Stumps whose fallen saplings we've already gone round to pick up. */
     private final Set<BlockPos> gleaned = new java.util.HashSet<>();
     private int idleMining;
+    /** Leaving cherry, fruit and apricorn trees standing while other wood will do ({@link #spared}). */
+    private boolean sparing;
 
     public GatherTask(List<Block> blocks, Predicate<ItemStack> match, int until) {
         this.blocks = new HashSet<>(blocks);
         this.match = match;
         this.until = until;
         this.label = BuiltInRegistries.BLOCK.getKey(blocks.get(0)).getPath() + (blocks.size() > 1 ? "+" : "");
+        sparing = this.blocks.stream().anyMatch(GatherTask::spared) && this.blocks.stream().anyMatch(b -> !spared(b));
+    }
+
+    /**
+     * Wood we cut last (the user's wish, 2026-10-26): cherry trees (vanilla's and Vinery's dark
+     * cherry), Vinery's apple orchard trees and Cobblemon's apricorn trees. Fruit and apricorns grow
+     * on them, and cherry is scarce; any other log makes the same planks.
+     */
+    public static boolean spared(Block b) {
+        if (!b.defaultBlockState().is(net.minecraft.tags.BlockTags.LOGS)) return false;
+        var id = BuiltInRegistries.BLOCK.getKey(b);
+        String path = id.getPath();
+        return path.contains("cherry") || path.contains("apricorn") || id.getNamespace().equals("vinery") && path.contains("apple");
+    }
+
+    /** What we're after just now: everything, or with the spared trees left out while we spare them. */
+    private boolean wanted(Block b) {
+        return blocks.contains(b) && !(sparing && spared(b));
+    }
+
+    /** Nothing but spared trees found after a look round: they're what there is, so cut them too. */
+    private boolean stopSparing(Bot bot) {
+        if (!sparing || explores < 2) return false;
+        sparing = false;
+        search = null;
+        bot.event("no other wood about: cutting cherry, fruit or apricorn trees for " + label + " after all");
+        return true;
     }
 
     public boolean gathers(Block b) {
@@ -117,7 +146,7 @@ public class GatherTask extends Task {
                 target = null;
                 return Status.RUNNING;
             }
-            builder.clearArea(target, target);
+            Nav.mine(target);
         }
         // far past what a break should take: something (reinforcement) is resisting
         if (targetTicks > limitTicks) {
@@ -154,6 +183,11 @@ public class GatherTask extends Task {
                 return false;
             }
             it.remove();
+            // Realistic Plant Growth: none of ours grows here (the biome, or leaves still shading it)
+            if (ReplantTask.pick(stump, e.getValue()) == null) {
+                ReforestTask.remember(bot, stump);
+                continue;
+            }
             setChild(bot, new ReplantTask(stump, e.getValue()));
             return true;
         }
@@ -202,7 +236,7 @@ public class GatherTask extends Task {
         BotConfig cfg = BotConfig.get();
         if (search == null) {
             search = new BlockSearch(bot.player().blockPosition(), cfg.searchRadius, 32,
-                    s -> blocks.contains(s.getBlock()), bot.memory().blacklistKeys());
+                    s -> wanted(s.getBlock()), bot.memory().blacklistKeys());
         }
         if (!search.step(24)) return Status.RUNNING;
         for (BlockPos p : search.results()) {
@@ -221,11 +255,12 @@ public class GatherTask extends Task {
             limitTicks = (int) (dist * 12) + breakTicks * 4 + 400;
             bot.lastAction("mine:" + BuiltInRegistries.BLOCK.getKey(s.getBlock()));
             Nav.stop();
-            Nav.baritone().getBuilderProcess().clearArea(p, p);
+            Nav.mine(p);
             search = null;
             return Status.RUNNING;
         }
         search = null;
+        if (stopSparing(bot)) return Status.RUNNING;
         if (++explores > 6) return fail("no " + label + " found after exploring");
         // somewhere we've seen it before beats wandering
         var kinds = lol.zym.zymbot.memory.Landmarks.kindsFor(blocks);
@@ -282,7 +317,7 @@ public class GatherTask extends Task {
         }
         if (!mining) {
             Nav.stop();
-            mine.mine(blocks.toArray(new Block[0]));
+            mine.mine(blocks.stream().filter(this::wanted).toArray(Block[]::new));
             bot.lastAction("mine:" + BuiltInRegistries.BLOCK.getKey(blocks.iterator().next()));
             mining = true;
             idleMining = 0;
@@ -307,6 +342,7 @@ public class GatherTask extends Task {
             // Baritone gave up: none known nearby
             if (++idleMining > 40) {
                 mining = false;
+                if (stopSparing(bot)) return Status.RUNNING;
                 if (++explores > 6) return fail("Baritone found no " + label);
                 setChild(bot, new ExploreTask(96));
             }

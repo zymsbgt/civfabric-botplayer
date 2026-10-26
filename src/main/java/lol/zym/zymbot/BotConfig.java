@@ -90,6 +90,13 @@ public final class BotConfig {
     public int chatBeaconSeconds = 60;
 
     /**
+     * The "~zb" lines above. Off for a bot on its own among players: they'd see a status line a
+     * minute, and every meal, meant for teammates there aren't. Commands to bots ("zb Bot2 come")
+     * and answers to players still go out; a leader's help calls still reach Claude through the hub.
+     */
+    public boolean chatRadio = true;
+
+    /**
      * Radio range shown in messages. The hub enforces the real limit (ZYMBOT_RANGE, default 150,
      * matching ZymLabs local chat): bots further apart, or in different dimensions, can't talk.
      */
@@ -112,6 +119,13 @@ public final class BotConfig {
 
     /** Break natural blocks that are in the way while pathing. */
     public boolean breakWhilePathing = true;
+
+    /**
+     * Extra path cost for each block broken on the way somewhere (Baritone's own default is 2; a
+     * block walked is about 4.6). High, so a bot walks round rather than digging through a player's
+     * ground (ZymSB asked), and digs only where there's no reasonable way round. Mining keeps 2.
+     */
+    public double travelBreakPenalty = 30;
 
     /** Pillar up and bridge with throwaway blocks while pathing. */
     public boolean placeWhilePathing = true;

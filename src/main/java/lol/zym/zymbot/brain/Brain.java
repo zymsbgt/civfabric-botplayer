@@ -54,6 +54,33 @@ public final class Brain {
     private long noUnstuckUntil;
     private long noShoreUntil;
     private long noTreatUntil, nextHealCall, noForageUntil, nextFragileWork;
+    /** Hunger a meal must gain over eating its ingredients as they are before we stop to make it. */
+    private static final double MEAL_GAIN = 3;
+    /**
+     * The last meal we set out to make, and how many we held or had eaten then. Eating cuts a meal
+     * job short after each one made (bread one loaf at a time), so the next try comes at once; but
+     * a try that made nothing waits a minute, or a meal that can't be made stands between us and
+     * eating or hunting.
+     */
+    private net.minecraft.world.item.Item lastMeal;
+    private int lastMealMark;
+    private long lastMealAt;
+
+    private Task meal(Bot bot, boolean chests, double minGain) {
+        if (lastMeal != null && mealMark(bot, lastMeal) <= lastMealMark && System.currentTimeMillis() - lastMealAt < 60_000) return null;
+        var m = Cookbook.best(bot, chests);
+        Task t = Cookbook.task(bot, m, minGain);
+        if (t != null) {
+            lastMeal = m.item();
+            lastMealMark = mealMark(bot, lastMeal);
+            lastMealAt = System.currentTimeMillis();
+        }
+        return t;
+    }
+
+    private static int mealMark(Bot bot, net.minecraft.world.item.Item it) {
+        return Inv.count(it) + lol.zym.zymbot.inv.Diet.timesEaten(bot, new net.minecraft.world.item.ItemStack(it));
+    }
     private final ShoppingList shopping = new ShoppingList();
     private ShoppingList.Find detour;
     private long noDetourUntil;
@@ -683,7 +710,7 @@ public final class Brain {
             case "flee", "bed" -> 5;
             case "fight" -> 4;
             case "eat", "shore", "shelter" -> 3;
-            case "unstuck", "grave", "lootgrave", "receive", "forage" -> 2;
+            case "unstuck", "grave", "lootgrave", "receive", "forage", "dinner" -> 2;
             case "sleep", "treat" -> 1;
             default -> 0;
         };
@@ -923,6 +950,8 @@ public final class Brain {
                     && bot.memory().bed.pos().closerThan(p.blockPosition(), 48) && bedEnclosed(bot);
             return rest ? "sleep" : "shelter";
         }
+        // a player called us over with food ("dinner"): hungry, or with nothing to eat, that beats hunting
+        if (!wet && bot.foodOffer() != null && (food <= 14 || EatTask.choose(bot) < 0)) return "dinner";
         // hungry with nothing to eat: go and get food before anything else (CivFabric won't
         // even let us craft below 4)
         if (!wet && food <= 6 && EatTask.choose(bot) < 0 && System.currentTimeMillis() > noForageUntil) return "forage";
@@ -1034,7 +1063,12 @@ public final class Brain {
                 }
                 yield new FightTask(threat(bot));
             }
-            case "eat" -> new EatTask();
+            case "eat" -> {
+                // what we carry may make a meal that fills more than eating it as it is (rabbit stew
+                // from a cooked rabbit, a carrot and a baked potato): cook it first
+                Task meal = meal(bot, false, MEAL_GAIN);
+                yield meal != null ? meal : new EatTask();
+            }
             case "snack" -> {
                 bot.event("eating before going into the water at " + snackFor.toShortString() + " (no eating once we're in)");
                 yield new EatTask();
@@ -1076,7 +1110,15 @@ public final class Brain {
                 yield new SleepTask(bot.memory().bed.pos());
             }
             case "receive" -> new ReceiveTask();
+            case "dinner" -> {
+                bot.event("going to " + bot.foodOffer() + " for food");
+                yield new DinnerTask(bot.foodOffer());
+            }
             case "forage" -> {
+                // a meal out of what we have first (bread from our wheat): eating it cuts the job
+                // short, so no hunt's wait after it, or we starve beside the rest of the wheat
+                Task meal = meal(bot, true, 0);
+                if (meal != null) yield meal;
                 noForageUntil = System.currentTimeMillis() + 90_000; // if the hunt fails, don't retry at once
                 bot.event("hungry with no food; hunting");
                 // and ask: a teammate stood beside a starving bot with food in its pack

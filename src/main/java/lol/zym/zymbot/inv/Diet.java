@@ -71,6 +71,21 @@ public final class Diet {
     }
 
     /**
+     * What the next {@code count} of this food restore, eaten one after another from now: Spice of
+     * Fabric counts each as eaten for the next, so the fourth bread in a row fills less than the first.
+     */
+    public static double nutritionOfNext(Bot bot, ItemStack s, int count) {
+        FoodProperties f = Inv.food(s);
+        if (f == null || count <= 0) return 0;
+        load();
+        if (!active) return (double) f.nutrition() * count;
+        int base = baseHunger(s), times = timesEaten(bot, s);
+        double sum = 0;
+        for (int k = 0; k < count; k++) sum += worth(base, times + k);
+        return sum;
+    }
+
+    /**
      * The game's own hunger value. Spice of Fabric (through Capsaicin) hands out a stack's food
      * already cut for repeats, so cutting that again counted a twice-eaten food as worth nothing.
      */

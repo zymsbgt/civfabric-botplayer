@@ -85,6 +85,14 @@ public final class ChatRadio {
     /** Send what's waiting, and our status and forecasts when they're due. On the client thread. */
     public void tick(Bot bot) {
         long now = System.currentTimeMillis();
+        if (!BotConfig.get().chatRadio) {
+            outbox.removeIf(l -> l.startsWith(TAG));
+            if (!outbox.isEmpty() && now - sentAt > SPACING_MS) {
+                sentAt = now;
+                bot.chat(outbox.removeFirst());
+            }
+            return;
+        }
         String beacon = beacon(bot);
         // the position is the one part that changes all the time: not a reason to speak early
         String stable = beacon.replaceFirst(" p=\\S+", "");

@@ -27,6 +27,43 @@ dependencies {
         modLocalRuntime files(plantGrowth)
         runtimeOnly "org.yaml:snakeyaml:2.3"
     }
+    // -PpackRules adds the pack's food and class rules: Spice of Fabric (cuts a food's worth with each
+    // repeat) and CivFabric (crafting hunger, class gates), so meals are tested as on the server
+    def packMods = "${System.getProperty('user.home')}/Library/Application Support/PrismLauncher/instances/${project.prism_instance}/minecraft/mods"
+    if (project.hasProperty("packRules")) {
+        // Loom drops the jars a mod bundles (Spice of Fabric carries Capsaicin, Coat and Tweed5, some
+        // nested two deep), so unpack them all beside it: mods go on as mods, plain libraries as libraries
+        def out = file("build/packlibs")
+        out.mkdirs()
+        def unpack
+        unpack = { File jar ->
+            def zip = new java.util.zip.ZipFile(jar)
+            try {
+                zip.entries().findAll { !it.directory && it.name.startsWith("META-INF/jars/") && it.name.endsWith(".jar") }.each { e ->
+                    def f = new File(out, e.name.substring(e.name.lastIndexOf('/') + 1))
+                    if (!f.exists()) f.withOutputStream { os -> os << zip.getInputStream(e) }
+                    unpack(f)
+                }
+            } finally {
+                zip.close()
+            }
+        }
+        for (name in ["spice-of-fabric-1.6.3-beta.1+mc1.21.1.jar", "civfabric-0.4.4.jar"]) {
+            def jar = file("${packMods}/${name}")
+            if (!jar.exists()) {
+                logger.warn("packRules: ${name} isn't in the Prism instance")
+                continue
+            }
+            modLocalRuntime files(jar)
+            unpack(jar)
+        }
+        out.listFiles().findAll { it.name.endsWith(".jar") }.sort().each { f ->
+            def zip = new java.util.zip.ZipFile(f)
+            def isMod = zip.getEntry("fabric.mod.json") != null
+            zip.close()
+            if (isMod) modLocalRuntime files(f) else runtimeOnly files(f)
+        }
+    }
 }
 
 loom {

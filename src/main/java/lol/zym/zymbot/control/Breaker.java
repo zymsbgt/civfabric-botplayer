@@ -91,7 +91,7 @@ public final class Breaker {
         Nav.allowBreaking(initial.getBlock());
         if (keepHand) Nav.autoTool(false);
         active = true;
-        Nav.baritone().getBuilderProcess().clearArea(pos, pos);
+        Nav.mine(pos);
     }
 
     private void finish() {

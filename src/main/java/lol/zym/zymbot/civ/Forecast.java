@@ -34,6 +34,8 @@ public final class Forecast {
     private static final String PREFIX = "[CivLabs] » ";
     /** CivFabric's dusk is 12380: before it a reading is about tonight, after it about tomorrow night. Keep clear of it. */
     private static final long BEFORE_DUSK = 12200, AFTER_DUSK = 12450;
+    /** The leader's nightly report: our own reading is in just after dusk, teammates' come over chat after it. */
+    private static final long REPORT_AT = AFTER_DUSK + 900;
     /** From here until the moon is well up, a likely blood moon sends us home. */
     private static final long BRACE_FROM = 10800, BRACE_UNTIL = 13000;
     /** The pooled chance of a blood moon tonight worth going home early for. */
@@ -80,6 +82,7 @@ public final class Forecast {
             merge(bot);
             prune(bot, day);
         }
+        report(bot, day, clock);
         // claimed bed checked once a likely blood moon is on its way: the claim wakes us at home if it goes wrong
         if (bedCheckedFor != day && clock < BRACE_UNTIL && bloodOdds(bot, day) >= BRACE_AT) {
             bedCheckedFor = day;
@@ -531,6 +534,31 @@ public final class Forecast {
         return sb.toString();
     }
 
+    /** As leader, once a night after sunset: everyone's readings of the coming night, to the players who asked. */
+    private static void report(Bot bot, long day, long clock) {
+        var mem = bot.memory();
+        if (mem.forecastReportTo.isEmpty() || bot.role() != Bot.Role.LEADER || clock < REPORT_AT || mem.forecastReportedFor == day + 1) return;
+        mem.forecastReportedFor = day + 1;
+        String line = reportLine(bot, day + 1, day);
+        bot.event("forecast: nightly report to " + String.join(", ", mem.forecastReportTo) + ": " + line);
+        for (String p : mem.forecastReportTo) bot.chat("@" + p + " " + line);
+    }
+
+    /** Each reader's forecast of {@code night} (the same reading by several put together), then the pooled odds. */
+    static String reportLine(Bot bot, long night, long day) {
+        Map<String, List<String>> by = new LinkedHashMap<>();
+        for (Reading r : bot.memory().notebook.values()) {
+            if (r.night != night) continue;
+            String what = (r.moon == null ? "nothing" : r.moon) + (r.confidence >= 0 ? " " + percent(r.confidence) : "");
+            by.computeIfAbsent(what, k -> new ArrayList<>()).add(r.reader);
+        }
+        if (by.isEmpty()) return "forecasts for " + when(night, day) + ": no readings yet";
+        List<String> parts = new ArrayList<>();
+        by.forEach((what, who) -> parts.add(String.join(", ", who) + " " + what));
+        return "forecasts for " + when(night, day) + ": " + String.join("; ", parts)
+                + (counted(bot, night).isEmpty() ? "" : ". Together: " + oddsLine(odds(bot, night)));
+    }
+
     /** The forecast command: summary, readings, a player's note, trust, players' records. */
     public static String command(Bot bot, String from, String[] a) {
         var mem = bot.memory();
@@ -549,6 +577,29 @@ public final class Forecast {
                     out.add(describe(r) + (counts(bot, r) ? "" : " [listed only]") + (f.isEmpty() ? "" : " [" + String.join(", ", f) + "]"));
                 }
                 return when(night, day) + ": " + (out.isEmpty() ? "no readings" : String.join("; ", out));
+            }
+            case "report" -> {
+                // forecast report <player|off>: a player may sign themselves up; a leader (or Claude) anyone
+                if (a.length < 3) return mem.forecastReportTo.isEmpty() ? "no nightly report; forecast report <player|off>"
+                        : "each night after sunset I tell " + String.join(", ", mem.forecastReportTo) + " everyone's forecasts; now: "
+                        + reportLine(bot, time % 24000 >= 12380 ? day + 1 : day, day);
+                String who = a[2].equalsIgnoreCase("me") ? from : a[2];
+                boolean off = who.equalsIgnoreCase("off") || a.length > 3 && a[3].equalsIgnoreCase("off");
+                if (off && a.length <= 3) {
+                    if (!ClassPlan.mayDirect(bot, from) && !(mem.forecastReportTo.size() == 1 && mem.forecastReportTo.get(0).equalsIgnoreCase(from)))
+                        return "only a leader (or Claude) turns everyone's report off; forecast report <you> off stops yours";
+                    mem.forecastReportTo.clear();
+                    return "nightly forecast report off";
+                }
+                if (!ClassPlan.mayDirect(bot, from) && !who.equalsIgnoreCase(from)) return "you can sign yourself up (forecast report me); a leader signs up others";
+                if (off) {
+                    mem.forecastReportTo.removeIf(n -> n.equalsIgnoreCase(who));
+                    return "no more nightly forecasts for " + who;
+                }
+                if (mem.forecastReportTo.stream().noneMatch(n -> n.equalsIgnoreCase(who))) mem.forecastReportTo.add(who);
+                // signed up after tonight's report time: the first comes tomorrow evening (they're asking now, so know now)
+                if (time % 24000 >= REPORT_AT) mem.forecastReportedFor = day + 1;
+                return "each night after sunset I'll tell " + who + " everyone's forecasts" + (bot.role() == Bot.Role.LEADER ? "" : " (while I'm the leader)");
             }
             case "note" -> {
                 if (!ClassPlan.mayDirect(bot, from)) return "only a leader (or Claude) records players' readings";
@@ -593,7 +644,7 @@ public final class Forecast {
                 return String.join(" | ", out);
             }
             default -> {
-                return "forecast | forecast readings [tonight|tomorrow|day] | forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank]"
+                return "forecast | forecast readings [tonight|tomorrow|day] | forecast report <player|me|off> [off] | forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank]"
                         + " | forecast trust <player> <full|show|ignore> <reason> | forecast players [name]";
             }
         }

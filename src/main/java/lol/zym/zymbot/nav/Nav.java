@@ -99,12 +99,30 @@ public final class Nav {
         configured = false;
     }
 
+    /** Baritone's own cost for a block broken on the way, kept while mining. */
+    private static final double MINING_BREAK_PENALTY = 2;
+
     /** Path to a goal; repeated calls with an equal goal don't restart the search. */
     public static void goTo(Goal goal) {
         IBaritone b = baritone();
         if (goal.equals(lastGoal) && b.getCustomGoalProcess().isActive()) return;
         lastGoal = goal;
+        breakPenalty(BotConfig.get().travelBreakPenalty);
         b.getCustomGoalProcess().setGoalAndPath(goal);
+    }
+
+    /** Go and break the block at {@code pos} (it must be off the no-break list: {@link #allowBreaking}). */
+    public static void mine(BlockPos pos) {
+        breakPenalty(MINING_BREAK_PENALTY);
+        baritone().getBuilderProcess().clearArea(pos, pos);
+    }
+
+    /**
+     * Travelling, walk round rather than dig through: ZymSB asked that bots heading somewhere don't
+     * break blocks on the way. Mining a block, the digging to it is the job, so it keeps the default.
+     */
+    private static void breakPenalty(double p) {
+        BaritoneAPI.getSettings().blockBreakAdditionalPenalty.value = p;
     }
 
     public static void goNear(BlockPos pos, int range) {
@@ -125,6 +143,7 @@ public final class Nav {
     }
 
     public static void follow(UUID player) {
+        breakPenalty(BotConfig.get().travelBreakPenalty);
         baritone().getFollowProcess().follow(e -> e.getUUID().equals(player));
     }
 

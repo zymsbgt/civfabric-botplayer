@@ -77,6 +77,10 @@ public final class Progression {
         // pack filling up: junk out, the rest into a chest at home (made if there's none with room),
         // where the index will find it again. Keep says which is which
         add("stash", () -> Inv.freeSlots() >= 8 || lol.zym.zymbot.inv.Keep.surplus(b()).isEmpty(), Progression::stash);
+        // the server says a bed is ours that we don't know (claimed before this memory): find that one
+        // rather than make another, whose claiming click would let it go
+        add("find_bed", () -> b().memory().bed != null || !Boolean.TRUE.equals(b().memory().bedClaimed) || FindBedTask.gaveUpRecently(),
+                b -> new FindBedTask(false));
         // a bed in whatever colour we have 3 wool of; shear for it (wooden shears, no class) otherwise
         add("bed", () -> b().memory().bed != null || Inv.find(s -> s.is(ItemTags.BEDS)) >= 0, Progression::bed);
         add("settle", () -> b().memory().bed != null, b -> new SettleTask());
@@ -597,6 +601,9 @@ public final class Progression {
         // cooked chicken in a chest at the base
         Task fetch = foodFromChest(bot);
         if (fetch != null) return fetch;
+        // then a meal out of what we have (bread from the wheat in a chest): no hunting for it
+        Task meal = Cookbook.task(bot, true, 0);
+        if (meal != null) return meal;
         Item[] meats = {Items.BEEF, Items.PORKCHOP, Items.MUTTON, Items.CHICKEN, Items.RABBIT};
         Item[] cooked = {Items.COOKED_BEEF, Items.COOKED_PORKCHOP, Items.COOKED_MUTTON, Items.COOKED_CHICKEN, Items.COOKED_RABBIT};
         EntityType<?>[] from = {EntityType.COW, EntityType.PIG, EntityType.SHEEP, EntityType.CHICKEN, EntityType.RABBIT};

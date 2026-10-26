@@ -23,10 +23,15 @@ import java.util.List;
  * Put saplings back where the forest was: the stumps we remember (trees cut with no sapling to
  * hand), or, told where, open grass on a 5-block grid around a spot. Saplings come from our chests
  * first. The bots cleared most of a forest by the base before replanting worked at all.
+ *
+ * <p>Only where a sapling we have (or can fetch) would grow: Realistic Plant Growth kills a sapling
+ * planted outside its biomes or without open sky ({@link ReplantTask#pick}).
  */
 public class ReforestTask extends Task {
     private static final int MAX_STUMPS = 300;
     private static final int GRID = 5;
+    /** The kinds we fetch from the chests for a round. */
+    private static final List<net.minecraft.world.item.Item> FETCHED = List.of(Items.OAK_SAPLING, Items.BIRCH_SAPLING, Items.SPRUCE_SAPLING);
 
     /** Null: the remembered stumps. Else plant open ground within {@code radius} of here. */
     private final BlockPos center;
@@ -36,6 +41,7 @@ public class ReforestTask extends Task {
     private boolean fetched;
     private Task lastChild;
     private String skipped = "";
+    private int unsuited;
 
     private ReforestTask(BlockPos center, int radius) {
         this.center = center;
@@ -56,8 +62,9 @@ public class ReforestTask extends Task {
                 + (spots == null ? "" : " " + planted + "/" + (planted + spots.size()));
     }
 
-    /** A tree's foot we cut and planted nothing in. */
+    /** A tree's foot we cut and planted nothing in (if any sapling kind grows in its biome at all). */
     public static void remember(Bot bot, BlockPos stump) {
+        if (WorldView.loaded(stump) && !ReplantTask.anyKindGrows(stump)) return;
         var list = bot.memory().stumps;
         String dim = bot.dim();
         if (list.stream().anyMatch(p -> p.dim.equals(dim) && p.pos().equals(stump))) return;
@@ -101,8 +108,7 @@ public class ReforestTask extends Task {
             fetched = true;
             int want = Math.min(16, spots.size());
             if (saplings < want) {
-                lastChild = new ObtainTask(new ItemTarget("sapling", s -> s.is(ItemTags.SAPLINGS),
-                        List.of(Items.OAK_SAPLING, Items.BIRCH_SAPLING, Items.SPRUCE_SAPLING), want));
+                lastChild = new ObtainTask(new ItemTarget("sapling", s -> s.is(ItemTags.SAPLINGS), FETCHED, want));
                 setChild(bot, lastChild);
                 return Status.RUNNING;
             }
@@ -112,13 +118,19 @@ public class ReforestTask extends Task {
         spots.sort(Comparator.comparingDouble(p -> p.distSqr(me)));
         while (!spots.isEmpty()) {
             BlockPos next = spots.remove(0);
+            if (WorldView.loaded(next) && ReplantTask.plantable(next) && ReplantTask.pick(next, "") == null) {
+                // none of ours grows here: the stump waits for a kind that does, if there is one
+                if (!ReplantTask.anyKindGrows(next)) forget(bot, next);
+                unsuited++;
+                continue;
+            }
             forget(bot, next);
             if (!ReplantTask.plantable(next) && WorldView.loaded(next)) continue;
             lastChild = new ReplantTask(next, "");
             setChild(bot, lastChild);
             return Status.RUNNING;
         }
-        return done(bot, "all planted");
+        return done(bot, unsuited > 0 ? "planted all I could; none of my saplings grows at " + unsuited + " of the spots" : "all planted");
     }
 
     /** Done for now: a success if anything went in, so a goal with no saplings to be had is snoozed. */
@@ -151,6 +163,9 @@ public class ReforestTask extends Task {
         if (base != null) keepOff.add(base);
         for (var st : mem.stations) if (st.at != null && st.at.dim.equals(bot.dim())) keepOff.add(st.at.pos());
         for (var c : mem.chests.values()) if (c.at != null && c.at.dim.equals(bot.dim())) keepOff.add(c.at.pos());
+        // what we'll plant: what we carry, and the kinds we fetch
+        java.util.Set<net.minecraft.world.item.Item> kinds = new java.util.LinkedHashSet<>(FETCHED);
+        for (int i = 0; i < 36; i++) if (Inv.inv().getItem(i).is(ItemTags.SAPLINGS)) kinds.add(Inv.inv().getItem(i).getItem());
         List<BlockPos> out = new ArrayList<>();
         java.util.Map<String, Integer> why = new java.util.TreeMap<>();
         for (int dx = -radius; dx <= radius; dx += GRID) {
@@ -168,6 +183,7 @@ public class ReforestTask extends Task {
                 String no = !ReplantTask.plantable(spot) || !WorldView.state(spot.below()).is(Blocks.GRASS_BLOCK)
                         ? "not grass (" + net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(WorldView.state(spot.below()).getBlock()).getPath() + ")"
                         : !bot.level().canSeeSky(spot) ? "no sky"
+                        : !ReplantTask.anyGrows(spot, kinds) ? "no sapling of ours grows in " + lol.zym.zymbot.farm.PlantRules.biomeAt(spot).getPath()
                         : keepOff.stream().anyMatch(k -> k.closerThan(spot, 10)) ? "by the base"
                         : crowded(spot) ? "crowded" : null;
                 if (no != null) {

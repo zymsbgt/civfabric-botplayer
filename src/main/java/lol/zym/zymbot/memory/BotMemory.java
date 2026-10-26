@@ -215,6 +215,10 @@ public final class BotMemory {
     public int guessChanges;
     /** How the last guess turned out, as the server put it at sunset. */
     public String guessResult;
+    /** Players the leader tells everyone's forecasts each night after sunset ("forecast report <player>"). */
+    public List<String> forecastReportTo = new ArrayList<>();
+    /** The night the last of those reports was about. */
+    public long forecastReportedFor = -1;
 
     /** Places worth coming back to (water, wild crops, ore, villages, named marks). */
     public Map<String, Landmark> landmarks = new LinkedHashMap<>();

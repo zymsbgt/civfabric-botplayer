@@ -31,8 +31,8 @@ public final class Commands {
     /** Command words for tab completion (main names only, not aliases). */
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
-            "sethome", "explore", "farm", "crops", "catch", "sleep", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
+            "sethome", "explore", "farm", "crops", "catch", "sleep", "findbed", "fillhole", "skipnight", "settle", "say", "ask", "tell",
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "dinner", "meals", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -41,7 +41,7 @@ public final class Commands {
             "tell", List.of("all"),
             "teamhome", List.of("set", "assign", "remove"),
             "classes", List.of("role", "refresh"),
-            "forecast", List.of("readings", "players", "note", "trust"));
+            "forecast", List.of("readings", "report", "players", "note", "trust"));
 
     public static final String HELP = String.join("\n",
             "status | inv | diet (what each food is worth now) | milestones | team | help",
@@ -51,12 +51,14 @@ public final class Commands {
             "stash all (everything into our nearest chest, making one if need be, then pause) | loot grave [x y z]",
             "reforest (saplings into the stumps we left) | reforest [x z] [radius] (open grass on a 5-block grid)",
             "tidy tables [keep] (pick up the base's spare crafting tables, keeping 2 by the board)",
-            "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | skipnight",
+            "farm [radius] [crop] [minutes] | crops (what grows here) | catch | home | sethome | sleep | findbed (follow /bed to the bed we hold) | fillhole [x1 y1 z1 x2 y2 z2] [block] (fill in the hole we stand in, or the open blocks in a box) | skipnight",
             "heal <player> (stitches/medkit/wound mush) | campfire (warm the bed) | pacifist (pacifism, regen and bed warmth)",
             "forecast [readings [night] | players [name]] (the pooled moon odds, our guess, readings, players' records)",
             "forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank] | forecast trust <player> full|show|ignore <reason>  (leaders)",
             "receive [seconds] (stand still and catch what a teammate throws; givers send it themselves)",
+            "meals (what I could cook from what we have, and what each gains) | dinner [player] (I have food: every hungry bot that hears it comes to me, or that player, to be fed, for 3 minutes)",
             "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | chests (the chest index) | level [class]",
+            "checkchest [player | x y z] (go and look in the chest by whoever asked, or by that player, or at x y z)",
             "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z",
             "teamhome | teamhome set <name> [x y z] [purpose] | assign <name> | remove <name>  (leaders only: the team's bases)",
             "say <text> | tell <bot|all> <command>  (bots within 150 blocks only)",
@@ -412,6 +414,21 @@ public final class Commands {
                             a[2], Long.parseLong(a[6]), from);
                     return newer ? "noted where " + a[1] + " was" : "already knew newer";
                 }
+                case "meals", "cook" -> {
+                    if (a.length > 1) {
+                        ItemTarget t = ItemTarget.parse(a[1], 1);
+                        if (t == null || t.candidates().isEmpty()) return "unknown item " + a[1];
+                        return Cookbook.explain(bot, t.candidates().get(0));
+                    }
+                    return Cookbook.describe(bot);
+                }
+                case "dinner", "foodhere" -> {
+                    String who = a.length > 1 ? a[1] : from;
+                    if (who.equalsIgnoreCase(bot.name())) return "dinner <player>: who has the food?";
+                    int food = bot.player().getFoodData().getFoodLevel();
+                    bot.offerFood(who, 180);
+                    return food <= 14 || EatTask.choose(bot) < 0 ? "coming to " + who + " for food" : "not hungry (" + food + "/20), but I'll come if I get hungry in the next 3 minutes";
+                }
                 case "receive" -> {
                     if (!bot.enabled() || bot.brain().focused()) return "not now: " + (bot.enabled() ? "emptying my pack" : "paused");
                     int secs = a.length > 1 ? Math.max(1, Math.min(30, Integer.parseInt(a[1]))) : 8;
@@ -494,6 +511,9 @@ public final class Commands {
                 case "feed" -> {
                     if (a.length > 1 && build(bot, from, a) == null) return "no food to spare";
                 }
+                case "sleep" -> {
+                    if (bot.memory().bed == null && !Boolean.TRUE.equals(bot.memory().bedClaimed)) return "no bed yet: settle first";
+                }
                 case "heal", "treat" -> {
                     String who = a.length > 1 ? a[1] : from;
                     if (build(bot, from, a) == null) return ClassPlan.isMedic(bot) ? "nothing to heal " + who + " with"
@@ -572,6 +592,22 @@ public final class Commands {
                 BlockPos at = p != null ? p.blockPosition() : bot.lastKnownPosition(who);
                 // nowhere in sight or radio range: where they were last seen, asking teammates on the way
                 return at == null ? new SeekTask(who, 3) : new GoToTask(at, 2);
+            }
+            case "checkchest", "lookin" -> {
+                // see what's in a chest now: at x y z, else the one by a player (who asked, or named),
+                // since players often have no coordinates: "the one I'm standing on"
+                if (a.length >= 4) return new LookInTask(new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3])));
+                String who = a.length > 1 ? a[1] : from;
+                Player p = bot.findPlayer(who);
+                BlockPos near = p != null ? p.blockPosition() : bot.lastKnownPosition(who);
+                if (near == null) return null;
+                BlockPos best = null;
+                for (BlockPos q : BlockPos.betweenClosed(near.offset(-3, -2, -3), near.offset(3, 2, 3))) {
+                    var be = bot.level().getBlockEntity(q);
+                    if (!(be instanceof net.minecraft.world.level.block.entity.ChestBlockEntity || be instanceof net.minecraft.world.level.block.entity.BarrelBlockEntity)) continue;
+                    if (best == null || q.distSqr(near) < best.distSqr(near)) best = q.immutable();
+                }
+                return best == null ? null : new LookInTask(best);
             }
             case "goto" -> {
                 if (a.length == 2) {
@@ -695,7 +731,27 @@ public final class Commands {
             case "sleep" -> {
                 // "sleep claim": just click it, which claims it at any hour (a claimed bed is our respawn point)
                 boolean claim = a.length > 1 && a[1].equalsIgnoreCase("claim");
-                return bot.memory().bed == null ? null : new SleepTask(bot.memory().bed.pos(), claim);
+                if (bot.memory().bed == null) return Boolean.TRUE.equals(bot.memory().bedClaimed) ? new FindBedTask(true) : null;
+                return new SleepTask(bot.memory().bed.pos(), claim);
+            }
+            case "findbed" -> {
+                return new FindBedTask(false);
+            }
+            case "fillhole", "fill" -> {
+                if (a.length < 7) return new FillHoleTask();
+                try {
+                    BlockPos c1 = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                    BlockPos c2 = new BlockPos(Integer.parseInt(a[4]), Integer.parseInt(a[5]), Integer.parseInt(a[6]));
+                    net.minecraft.world.item.Item only = null;
+                    if (a.length > 7) {
+                        var id = net.minecraft.resources.ResourceLocation.tryParse(a[7].contains(":") ? a[7] : "minecraft:" + a[7]);
+                        only = id == null ? null : BuiltInRegistries.ITEM.getOptional(id).orElse(null);
+                        if (only == null) return null;
+                    }
+                    return new FillHoleTask(BlockPos.min(c1, c2), BlockPos.max(c1, c2), only);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
             }
             case "settle" -> {
                 return new SettleTask();

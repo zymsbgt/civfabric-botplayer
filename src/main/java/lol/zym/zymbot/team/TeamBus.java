@@ -71,6 +71,8 @@ public final class TeamBus {
     private final Set<String> everSeen = ConcurrentHashMap.newKeySet();
     /** Bots the hub has shown us: they had the hub's token, so they're the team's. */
     private final Set<String> hubSeen = ConcurrentHashMap.newKeySet();
+    /** Ids of our players' lines for Claude that its watcher has picked up from the hub. */
+    private final Set<String> chatRead = ConcurrentHashMap.newKeySet();
     private volatile JsonObject pendingState;
     private volatile List<JsonObject> boards = List.of();
     private volatile boolean connected;
@@ -109,7 +111,8 @@ public final class TeamBus {
             JsonObject st = pendingState;
             if (st != null) {
                 pendingState = null;
-                post("/state", st);
+                JsonObject r = post("/state", st);
+                if (r.has("chat_read")) for (JsonElement e : r.getAsJsonArray("chat_read")) chatRead.add(e.getAsString());
             }
             // first poll only learns where the inbox is; older messages were for a previous session
             JsonObject in = get("/inbox", "after", String.valueOf(Math.max(lastSeq, 0)));
@@ -265,6 +268,11 @@ public final class TeamBus {
     public Collection<String> knownNames() {
         for (Member m : radio.members(Bot.get())) everSeen.add(m.name());
         return everSeen;
+    }
+
+    /** Whether Claude's watcher has picked up the player's line with this id (the hub tells us when it does). */
+    public boolean chatRead(String id) {
+        return chatRead.contains(id);
     }
 
     /** Whether the hub has shown us this bot this session. */
