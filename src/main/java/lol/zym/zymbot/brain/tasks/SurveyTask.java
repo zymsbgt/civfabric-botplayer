@@ -88,15 +88,17 @@ public class SurveyTask extends Task {
                 continue;
             }
             counts.merge(b instanceof BarrelBlock ? "barrel" : "chest", 1, Integer::sum);
+            // a double chest is one store, indexed under whichever half was opened
+            BlockPos at = q.immutable();
+            BlockPos twin = b instanceof ChestBlock && st.getValue(ChestBlock.TYPE) != net.minecraft.world.level.block.state.properties.ChestType.SINGLE
+                    ? at.relative(ChestBlock.getConnectedDirection(st)) : null;
             // Lootr's are loot, not anyone's store; known ones are indexed already
-            if (BuiltInRegistries.BLOCK.getKey(b).getNamespace().equals("lootr") || ChestIndex.record(bot, q) != null) continue;
+            if (BuiltInRegistries.BLOCK.getKey(b).getNamespace().equals("lootr") || ChestIndex.record(bot, at) != null
+                    || twin != null && (ChestIndex.record(bot, twin) != null || toLook.contains(twin))) continue;
             if (bot.nearSomeoneElsesBuild(q)) {
                 skipped++;
                 continue;
             }
-            // a double chest is one store: look in one half
-            BlockPos at = q.immutable();
-            if (toLook.stream().anyMatch(t -> t.distManhattan(at) == 1 && t.getY() == at.getY())) continue;
             toLook.add(at);
         }
         toLook.sort(Comparator.comparingDouble(q -> q.distSqr(me)));
