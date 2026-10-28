@@ -42,6 +42,8 @@ public class CookPotTask extends Task {
     private Phase phase = Phase.GATHER;
     private int gathered;
     private BlockPos pot;
+    /** The pot job under way: its ingredients aren't for eating (the test bot ate the cider's apples). */
+    private static CookPotTask active;
 
     public CookPotTask(RecipeHolder<?> recipe, int count) {
         this.recipe = recipe;
@@ -88,8 +90,15 @@ public class CookPotTask extends Task {
         return "Cook " + Inv.id(output).replace("minecraft:", "") + " " + made() + "/" + count + " (" + phase.name().toLowerCase() + ")";
     }
 
+    /** Something a pot job under way still needs: the eat reflex leaves it be. */
+    public static boolean reserved(ItemStack s) {
+        CookPotTask t = active;
+        return t != null && t.phase != Phase.DONE && t.ingredients.stream().anyMatch(i -> i.test(s));
+    }
+
     @Override
     protected Status onTick(Bot bot) {
+        active = this;
         if (child != null) {
             runChild(bot);
             return Status.RUNNING;
@@ -252,6 +261,7 @@ public class CookPotTask extends Task {
     @Override
     public void stop(Bot bot) {
         super.stop(bot);
+        if (active == this) active = null;
         if (isPotMenu(bot.player().containerMenu)) bot.player().closeContainer();
         Nav.stop();
     }

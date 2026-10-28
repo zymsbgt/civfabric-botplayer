@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "nobreak", "explore", "farm", "crops", "catch", "sleep", "findbed", "fillhole", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "survey", "standby", "cook", "dinner", "meals", "level", "landmarks", "mark", "break", "find", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "survey", "standby", "pot", "dinner", "meals", "level", "landmarks", "mark", "break", "find", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -46,7 +46,7 @@ public final class Commands {
     public static final String HELP = String.join("\n",
             "status | inv | diet (what each food is worth now) | milestones | team | help",
             "start | pause | stop (clears job) | role worker|leader",
-            "get <item> [n] | give <player> <item> [n] | hunt [animal] [n] | cook <meal> [n] (in a Farmer's Delight cooking pot on heat nearby)",
+            "get <item> [n] | give <player> <item> [n] | hunt [animal] [n] | pot <meal> [n] (cook it in a Farmer's Delight cooking pot on heat nearby)",
             "follow [player] | come [player] | whereis <player> | goto x y z | goto x z | explore [dist]",
             "stash all (everything into our nearest chest, making one if need be, then pause) | loot grave [x y z]",
             "reforest (saplings into the stumps we left) | reforest [x z] [radius] (open grass on a 5-block grid)",
@@ -675,8 +675,9 @@ public final class Commands {
             case "survey", "lookaround" -> {
                 return new lol.zym.zymbot.brain.tasks.SurveyTask();
             }
-            case "cook" -> {
-                // a meal in a Farmer's Delight cooking pot nearby (on heat): "cook farmersdelight:apple_cider 1"
+            case "pot" -> {
+                // a meal in a Farmer's Delight cooking pot nearby (on heat): "pot farmersdelight:apple_cider 1"
+                // ("cook" was taken: it's "meals" for one item)
                 if (a.length < 2) return null;
                 var t = ItemTarget.parse(a[1], 1);
                 if (t == null || t.candidates().isEmpty()) return null;

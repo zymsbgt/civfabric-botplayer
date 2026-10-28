@@ -84,7 +84,7 @@ public class EatTask extends Task {
         for (int i = 0; i < 36; i++) {
             ItemStack s = Inv.inv().getItem(i);
             FoodProperties f = Inv.food(s);
-            if (f == null || keptBack(bot, s)) continue;
+            if (f == null || keptBack(bot, s) || CookPotTask.reserved(s) && !starving) continue;
             if (Inv.riskyFood(s) && !starving) continue;
             // poison can't kill, but it stops at 1 HP and leaves us to die to the next hit: a starving
             // Bot4 ate a pufferfish at 8 HP and went out hunting at 1. Only what we can take, unless
