@@ -83,6 +83,10 @@ public final class BotMemory {
         public boolean lootr;
         /** Next to villagers or someone else's build: look, don't take. */
         public boolean offLimits;
+        /** Its owner said we may eat from it ("chests food x y z"): food only, even when off limits. */
+        public boolean foodShared;
+        /** Its owner said we may take from it ("chests share x y z"): anything, even when off limits. Never stashed into. */
+        public boolean shared;
         /** Empty slots when last seen open; -1 if never counted. 0: full, a stash goes elsewhere. */
         public int free = -1;
         /** Someone else (a player, not one of us) has been into it since we last looked: who. */
@@ -176,6 +180,11 @@ public final class BotMemory {
     /** Specialisation slots this server gives a player, once the class screen has shown it. */
     public Integer classSlots;
     public boolean drainArmed;
+    /**
+     * The job to go back to whenever we have none ("standby follow ZymSB"), instead of our own
+     * goals: with people about, ZymSB wants bots at their side until they're given a task.
+     */
+    public String standby;
     /** Our class role (grower, smith, delver, scholar) and its classes; kept once chosen. */
     public String classRole;
     public List<String> classPlan = new ArrayList<>();

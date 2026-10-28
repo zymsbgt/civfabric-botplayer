@@ -227,7 +227,7 @@ public final class ChestIndex {
     }
 
     public static boolean takeable(BotMemory.ChestRecord r) {
-        return (r.ours || r.lootr) && !r.offLimits;
+        return r.shared || (r.ours || r.lootr) && !r.offLimits;
     }
 
     /** The nearest chest we may take from that held at least one of {@code item}, or null. */

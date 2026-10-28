@@ -83,6 +83,12 @@ public final class ClassPlan {
         bot.memory().classRole = "custom";
         bot.memory().classPlan = new ArrayList<>(classes);
         bot.memory().save();
+        // a pin in the config wins over the plan: move the pin too, or the change says done and does
+        // nothing (Wandersong, pinned hunter+miner, was told medic+hunter and carried on as before)
+        if (!BotConfig.get().classes.isEmpty()) {
+            BotConfig.get().classes = new ArrayList<>(classes);
+            BotConfig.save();
+        }
         return "classes now " + String.join(", ", classes);
     }
 

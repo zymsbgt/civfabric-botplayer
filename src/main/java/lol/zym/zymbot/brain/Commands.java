@@ -32,7 +32,7 @@ public final class Commands {
     public static final List<String> WORDS = List.of("status", "inv", "milestones", "team", "help",
             "start", "pause", "stop", "role", "heal", "pacifist", "forecast", "campfire", "get", "give", "hunt", "follow", "come", "whereis", "errands", "deaths", "goto", "home",
             "sethome", "nobreak", "explore", "farm", "crops", "catch", "sleep", "findbed", "fillhole", "skipnight", "settle", "say", "ask", "tell",
-            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "survey", "dinner", "meals", "level", "landmarks", "mark", "break", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
+            "board", "post", "cancel", "blocks", "map", "navdebug", "receive", "classes", "phase", "chests", "checkchest", "survey", "standby", "cook", "dinner", "meals", "level", "landmarks", "mark", "break", "find", "teamhome", "grave", "drops", "cost", "stash", "loot", "reforest", "tidy");
 
     /** Likely second words after a command word, for tab completion. */
     public static final Map<String, List<String>> NEXT_WORDS = Map.of(
@@ -46,7 +46,7 @@ public final class Commands {
     public static final String HELP = String.join("\n",
             "status | inv | diet (what each food is worth now) | milestones | team | help",
             "start | pause | stop (clears job) | role worker|leader",
-            "get <item> [n] | give <player> <item> [n] | hunt [animal] [n]",
+            "get <item> [n] | give <player> <item> [n] | hunt [animal] [n] | cook <meal> [n] (in a Farmer's Delight cooking pot on heat nearby)",
             "follow [player] | come [player] | whereis <player> | goto x y z | goto x z | explore [dist]",
             "stash all (everything into our nearest chest, making one if need be, then pause) | loot grave [x y z]",
             "reforest (saplings into the stumps we left) | reforest [x z] [radius] (open grass on a 5-block grid)",
@@ -57,11 +57,11 @@ public final class Commands {
             "forecast note <player> <tonight|tomorrow|day> <moon|none> [confidence%] [rank] | forecast trust <player> full|show|ignore <reason>  (leaders)",
             "receive [seconds] (stand still and catch what a teammate throws; givers send it themselves)",
             "meals (what I could cook from what we have, and what each gains) | dinner [player] (I have food: every hungry bot that hears it comes to me, or that player, to be fed, for 3 minutes)",
-            "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | chests (the chest index) | level [class]",
+            "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | standby <job...>|off (the job to go back to between tasks, e.g. standby follow ZymSB) | chests (the chest index) | chests food|share <x> <y> <z> [off] (a player's chest we may eat from, or take anything from) | level [class]",
             "checkchest [player | x y z] (go and look in the chest by whoever asked, or by that player, or at x y z)",
             "nobreak [radius | off] (break nothing within radius of home: no gathering there, and paths go round)",
             "survey (note the crafting tables and furnaces within 24 blocks and look in every chest there not yet indexed)",
-            "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z",
+            "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z | break under [player] | find <block> [radius] (where blocks of a kind are, nearest first)",
             "teamhome | teamhome set <name> [x y z] [purpose] | assign <name> | remove <name>  (leaders only: the team's bases)",
             "say <text> | tell <bot|all> <command>  (bots within 150 blocks only)",
             "board | board create <name> | board chest | post <item> <n> [to <name>|chest] | cancel <post>",
@@ -126,6 +126,26 @@ public final class Commands {
                             sb.append(' ').append(BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(p).getBlock()).getPath());
                         }
                     }
+                    return sb.toString();
+                }
+                case "find" -> {
+                    // where blocks of a kind are around us, nearest first: players can't always give
+                    // coordinates (ZymSB's world hides them on F3: "it's the pot in front of us")
+                    if (a.length < 2) return "find <block id or part of one> [radius]";
+                    String want = a[1].toLowerCase(Locale.ROOT);
+                    int r = a.length > 2 ? Math.min(Integer.parseInt(a[2]), 32) : 12;
+                    BlockPos me = bot.player().blockPosition();
+                    List<BlockPos> hits = new java.util.ArrayList<>();
+                    for (BlockPos q : BlockPos.betweenClosed(me.offset(-r, -r, -r), me.offset(r, r, r))) {
+                        String id = BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(q).getBlock()).toString();
+                        if (id.equals(want) || id.contains(want)) hits.add(q.immutable());
+                    }
+                    if (hits.isEmpty()) return "no " + want + " within " + r;
+                    hits.sort(java.util.Comparator.comparingDouble(q -> q.distSqr(me)));
+                    StringBuilder sb = new StringBuilder(hits.size() + " " + want + ":");
+                    for (BlockPos q : hits.subList(0, Math.min(hits.size(), 8)))
+                        sb.append(' ').append(q.toShortString()).append(" (")
+                                .append(BuiltInRegistries.BLOCK.getKey(bot.level().getBlockState(q).getBlock()).getPath()).append(')');
                     return sb.toString();
                 }
                 case "navdebug" -> {
@@ -382,13 +402,54 @@ public final class Commands {
                     bot.memory().save();
                     return "marked " + a[1] + " at " + bot.player().blockPosition().toShortString();
                 }
+                case "standby" -> {
+                    // the job to go back to between tasks, e.g. "standby follow ZymSB"; "standby off" ends it
+                    if (a.length == 1) return bot.memory().standby == null ? "no standby job" : "standby: " + bot.memory().standby;
+                    if (a[1].equalsIgnoreCase("off")) {
+                        bot.memory().standby = null;
+                        bot.memory().save();
+                        return "no standby job: back to our own goals between tasks";
+                    }
+                    String line = String.join(" ", Arrays.copyOfRange(a, 1, a.length));
+                    if (build(bot, from, Arrays.copyOfRange(a, 1, a.length)) == null) return "not a job: " + line;
+                    bot.memory().standby = line;
+                    bot.memory().save();
+                    return "standby: " + line + " (between tasks)";
+                }
                 case "chests" -> {
                     var idx = bot.memory().chests;
                     if (idx.isEmpty()) return "no chests indexed yet";
+                    // a player's chest we may eat from (ZymSB: "whenever you're hungry, take food from the chest"),
+                    // or take anything from (ZymSB wanted melon juice: sugar cane and glass were in their chests)
+                    if (a.length >= 5 && (a[1].equalsIgnoreCase("food") || a[1].equalsIgnoreCase("share"))) {
+                        boolean food = a[1].equalsIgnoreCase("food");
+                        BlockPos at;
+                        try {
+                            at = new BlockPos(Integer.parseInt(a[2]), Integer.parseInt(a[3]), Integer.parseInt(a[4]));
+                        } catch (NumberFormatException e) {
+                            return "chests food|share <x> <y> <z> [off]";
+                        }
+                        boolean on = !(a.length > 5 && a[5].equalsIgnoreCase("off"));
+                        var r = idx.values().stream().filter(c -> c.at != null && c.at.pos().equals(at)).findFirst().orElse(null);
+                        if (r == null) return "no chest indexed at " + at.toShortString() + " (survey or checkchest it first)";
+                        int n = 0;
+                        // both halves of a double chest: the twin beside it was seen holding the same things
+                        for (var c : idx.values()) {
+                            if (c.at == null || !java.util.Objects.equals(c.at.dim, r.at.dim)) continue;
+                            BlockPos q = c.at.pos();
+                            if (q.equals(at) || q.getY() == at.getY() && q.distManhattan(at) == 1 && c.items.equals(r.items)) {
+                                if (food) c.foodShared = on;
+                                else c.shared = on;
+                                n++;
+                            }
+                        }
+                        bot.memory().save();
+                        return (on ? (food ? "may eat from " : "may take from ") : (food ? "won't eat from " : "won't take from ")) + "the chest at " + at.toShortString() + (n > 1 ? " (both halves)" : "");
+                    }
                     StringBuilder sb = new StringBuilder();
                     for (var r : idx.values()) {
                         if (r.at == null) continue;
-                        sb.append(r.at.pos().toShortString()).append(r.ours ? " ours" : r.lootr ? " lootr" : r.offLimits ? " not ours" : "")
+                        sb.append(r.at.pos().toShortString()).append(r.ours ? " ours" : r.lootr ? " lootr" : r.offLimits ? " not ours" : "").append(r.shared ? " (shared)" : r.foodShared ? " (food shared)" : "")
                                 .append(": ").append(r.items.size()).append(" kinds");
                         r.items.entrySet().stream().sorted((x, y) -> y.getValue() - x.getValue()).limit(4)
                                 .forEach(e -> sb.append(", ").append(e.getValue()).append(" ").append(e.getKey().replace("minecraft:", "")));
@@ -614,6 +675,14 @@ public final class Commands {
             case "survey", "lookaround" -> {
                 return new lol.zym.zymbot.brain.tasks.SurveyTask();
             }
+            case "cook" -> {
+                // a meal in a Farmer's Delight cooking pot nearby (on heat): "cook farmersdelight:apple_cider 1"
+                if (a.length < 2) return null;
+                var t = ItemTarget.parse(a[1], 1);
+                if (t == null || t.candidates().isEmpty()) return null;
+                var r = lol.zym.zymbot.brain.tasks.CookPotTask.recipeFor(bot, t.candidates().get(0));
+                return r == null ? null : new lol.zym.zymbot.brain.tasks.CookPotTask(r, a.length > 2 ? Integer.parseInt(a[2]) : 1);
+            }
             case "checkchest", "lookin" -> {
                 // see what's in a chest now: at x y z, else the one by a player (who asked, or named),
                 // since players often have no coordinates: "the one I'm standing on"
@@ -652,15 +721,39 @@ public final class Commands {
                 return null;
             }
             case "break" -> {
-                // break the block at x y z with Baritone (it walks there and picks the tool)
-                if (a.length < 4) return null;
-                BlockPos at = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                // break the block at x y z with Baritone (it walks there and picks the tool), or the one
+                // under a player ("break under ZymSB"): the block below their middle is often air when
+                // they stand near an edge, so it's whichever block under their feet is solid, middle first
+                BlockPos at;
+                if (a.length >= 2 && a[1].equalsIgnoreCase("under")) {
+                    Player p = bot.findPlayer(a.length > 2 ? a[2] : from);
+                    if (p == null) return null;
+                    var box = p.getBoundingBox();
+                    int y = net.minecraft.util.Mth.floor(box.minY - 0.01);
+                    at = null;
+                    double best = Double.MAX_VALUE;
+                    for (int x = net.minecraft.util.Mth.floor(box.minX); x <= net.minecraft.util.Mth.floor(box.maxX); x++)
+                        for (int z = net.minecraft.util.Mth.floor(box.minZ); z <= net.minecraft.util.Mth.floor(box.maxZ); z++) {
+                            BlockPos q = new BlockPos(x, y, z);
+                            if (bot.level().getBlockState(q).getCollisionShape(bot.level(), q).isEmpty()) continue;
+                            double d = q.getCenter().distanceToSqr(p.getX(), q.getCenter().y, p.getZ());
+                            if (d < best) {
+                                best = d;
+                                at = q;
+                            }
+                        }
+                    if (at == null) return null;
+                } else {
+                    if (a.length < 4) return null;
+                    at = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+                }
+                BlockPos spot = at;
                 return new Task() {
-                    private final lol.zym.zymbot.control.Breaker breaker = new lol.zym.zymbot.control.Breaker(at);
+                    private final lol.zym.zymbot.control.Breaker breaker = new lol.zym.zymbot.control.Breaker(spot);
 
                     @Override
                     public String name() {
-                        return "Break " + at.toShortString();
+                        return "Break " + spot.toShortString();
                     }
 
                     @Override

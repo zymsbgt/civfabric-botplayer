@@ -730,6 +730,7 @@ public final class Bot {
         if (tick % 600 == 1 || surveyed.isEmpty() && tick % 40 == 0) survey();
         if (tick % 20 == 5) notePlayers();
         if (tick % 10 == 3) Nav.unhem(p.blockPosition());
+        if (tick % 10 == 7) Nav.guardZone();
 
         if (handleDeath()) return;
         // the server sends our position, pack and chunks over the first seconds: auto-started,
@@ -1196,6 +1197,9 @@ public final class Bot {
         JsonObject inv = new JsonObject();
         inventoryCounts().forEach(inv::addProperty);
         o.add("inventory", inv);
+        // the hands too: the offhand isn't in the 36 slots (ZymSB saw a crossbow there we couldn't account for)
+        o.addProperty("mainhand", p.getMainHandItem().isEmpty() ? "" : Inv.id(p.getMainHandItem().getItem()) + " x" + p.getMainHandItem().getCount());
+        o.addProperty("offhand", p.getOffhandItem().isEmpty() ? "" : Inv.id(p.getOffhandItem().getItem()) + " x" + p.getOffhandItem().getCount());
         JsonArray armor = new JsonArray();
         for (ItemStack a : p.getArmorSlots()) if (!a.isEmpty()) armor.add(Inv.id(a.getItem()));
         o.add("armor", armor);

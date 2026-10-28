@@ -652,7 +652,7 @@ public final class Progression {
         int bestCount = 0;
         double bestD = 96 * 96;
         for (var r : bot.memory().chests.values()) {
-            if (r.at == null || !java.util.Objects.equals(r.at.dim, bot.dim()) || !lol.zym.zymbot.memory.ChestIndex.takeable(r)) continue;
+            if (r.at == null || !java.util.Objects.equals(r.at.dim, bot.dim()) || !lol.zym.zymbot.memory.ChestIndex.takeable(r) && !r.foodShared) continue;
             double d = r.at.pos().distSqr(me);
             if (d > bestD) continue;
             Item pick = null;

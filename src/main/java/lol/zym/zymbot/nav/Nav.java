@@ -107,12 +107,16 @@ public final class Nav {
         IBaritone b = baritone();
         if (goal.equals(lastGoal) && b.getCustomGoalProcess().isActive()) return;
         lastGoal = goal;
-        breakPenalty(travelPenalty(goal instanceof baritone.api.utils.interfaces.IGoalRenderPos r ? r.getGoalPos() : null));
+        mining = false;
+        travelGoal = goal instanceof baritone.api.utils.interfaces.IGoalRenderPos r ? r.getGoalPos() : null;
+        travelRules();
         b.getCustomGoalProcess().setGoalAndPath(goal);
     }
 
     /** Go and break the block at {@code pos} (it must be off the no-break list: {@link #allowBreaking}). */
     public static void mine(BlockPos pos) {
+        mining = true;
+        BaritoneAPI.getSettings().allowBreak.value = BotConfig.get().breakWhilePathing;
         breakPenalty(MINING_BREAK_PENALTY);
         baritone().getBuilderProcess().clearArea(pos, pos);
     }
@@ -121,13 +125,27 @@ public final class Nav {
      * Travelling, walk round rather than dig through: ZymSB asked that bots heading somewhere don't
      * break blocks on the way. Mining a block, the digging to it is the job, so it keeps the default.
      */
-    /** A break in the no-break zone costs as much as a long walk round: a last resort, when boxed in. */
-    private static final double NO_BREAK_ZONE_PENALTY = 1000;
+    private static boolean mining;
+    private static BlockPos travelGoal;
 
-    private static double travelPenalty(BlockPos goal) {
+    /**
+     * No breaking at all on a trip into, out of or through the no-break zone: a high penalty still
+     * let Wandersong dig a stair from its bed up to ZymSB when there was no walk, and ZymSB had to
+     * ask for the hole to be patched. Boxed in there, a trip fails rather than digs.
+     */
+    private static void travelRules() {
         var bot = lol.zym.zymbot.Bot.get();
-        if (bot != null && (bot.inNoBreakZone(bot.player().blockPosition(), 0) || bot.inNoBreakZone(goal, 0))) return NO_BREAK_ZONE_PENALTY;
-        return BotConfig.get().travelBreakPenalty;
+        boolean zone = bot != null && (bot.inNoBreakZone(bot.player().blockPosition(), 0) || bot.inNoBreakZone(travelGoal, 0));
+        BaritoneAPI.getSettings().allowBreak.value = BotConfig.get().breakWhilePathing && !zone;
+        breakPenalty(BotConfig.get().travelBreakPenalty);
+    }
+
+    /**
+     * Every few ticks: a trip that set off outside the zone (a follow) comes into it, and its next
+     * path is planned without breaks.
+     */
+    public static void guardZone() {
+        if (!mining) travelRules();
     }
 
     private static void breakPenalty(double p) {
@@ -152,7 +170,9 @@ public final class Nav {
     }
 
     public static void follow(UUID player) {
-        breakPenalty(travelPenalty(null));
+        mining = false;
+        travelGoal = null;
+        travelRules();
         baritone().getFollowProcess().follow(e -> e.getUUID().equals(player));
     }
 

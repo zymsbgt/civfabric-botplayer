@@ -54,6 +54,10 @@ public final class Brain {
     private long noUnstuckUntil;
     private long noShoreUntil;
     private long noTreatUntil, nextHealCall, noForageUntil, nextFragileWork;
+    /** Tick from which the standby job may be taken up again (later after it failed: nobody to follow). */
+    private long nextStandby;
+    /** The job running is the standby one, taken up on our own. */
+    private boolean onStandby;
     /** Hunger a meal must gain over eating its ingredients as they are before we stop to make it. */
     private static final double MEAL_GAIN = 3;
     /**
@@ -125,6 +129,7 @@ public final class Brain {
         job = task;
         jobSource = source;
         this.repeatCmd = repeatCmd;
+        onStandby = false;
     }
 
     public void clearJob() {
@@ -282,8 +287,23 @@ public final class Brain {
         }
 
         if (!errands.isEmpty() && bot.ticks() % 20 == 0) checkErrands(bot);
+        String standby = bot.memory().standby;
+        if (job == null && standby != null && errands.isEmpty() && bot.ticks() >= nextStandby) {
+            nextStandby = bot.ticks() + 20;
+            job = Commands.build(bot, bot.name(), standby.split("\\s+"));
+            if (job != null) {
+                jobSource = bot.name();
+                onStandby = true;
+            }
+        }
         if (job != null) {
             pause(bot, Layer.JOB);
+            // a job given in bed gets us up, unless it's the sleep itself: Wandersong lay in bed on
+            // "follow ZymSB" until dawn, the follow job running and going nowhere
+            if (bot.player().isSleeping() && !(job instanceof SleepTask) && !(job instanceof FindBedTask)) {
+                bot.player().connection.send(new net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket(
+                        bot.player(), net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket.Action.STOP_SLEEPING));
+            }
             Task.Status s = job.tick(bot);
             if (asideFor != null) {
                 setJobAside(bot);
@@ -291,6 +311,11 @@ public final class Brain {
             }
             if (s != Task.Status.RUNNING) {
                 String result = s == Task.Status.SUCCESS ? "done: " + job.name() : "failed: " + job.failureReason();
+                // the standby job failing (nobody to follow) is tried again in a minute, not every second;
+                // any other job failing goes straight back to it (a failed "get" left Wandersong a minute
+                // free, and it stashed its pack and set off for stone instead of following ZymSB)
+                nextStandby = bot.ticks() + (s == Task.Status.FAILURE && onStandby ? 1200 : 0);
+                onStandby = false;
                 if (s == Task.Status.FAILURE && job instanceof BoardJobTask b) skipPost(b, 10 * 60_000L, job.failureReason());
                 bot.event("job " + result);
                 bot.reply(jobSource, "job " + result);
