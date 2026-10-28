@@ -714,8 +714,10 @@ public final class Progression {
     /** The next milestone, or with {@code safeOnly} the next one a fragile bot may do. */
     public Milestone next(boolean safeOnly) {
         long now = System.currentTimeMillis();
+        boolean human = BotConfig.get().humanWorld;
         // a full pack fails every craft and pickup, whatever comes first on the ladder: room first
-        if (Inv.freeSlots() == 0) {
+        // (not among people: the pack is theirs, it isn't ours to stash)
+        if (Inv.freeSlots() == 0 && !human) {
             for (Milestone m : ladder) {
                 if (m.id().equals("stash") && !m.done().getAsBoolean() && snoozed.getOrDefault("stash", 0L) <= now) return m;
             }
@@ -724,6 +726,8 @@ public final class Progression {
             // a Grower's provisions come from its own fields at home: as quiet as work gets, and a hurt
             // Grower with nothing to eat beside a planted farm was going hungry (Bot1)
             if (safeOnly && !SAFE.contains(m.id()) && !(m.id().equals("provisions") && farmsAtHome(b()))) continue;
+            // among people only what earns class XP is ours to take up unasked
+            if (human && !m.id().startsWith("level_")) continue;
             if (m.done().getAsBoolean()) continue;
             Long until = snoozed.get(m.id());
             if (until != null && until > now) continue;

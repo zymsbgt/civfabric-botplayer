@@ -38,9 +38,17 @@ public class EatTask extends Task {
         for (int i = 0; i < 36; i++) {
             ItemStack s = Inv.inv().getItem(i);
             FoodProperties f = Inv.food(s);
-            if (f != null && Inv.healingFood(s) && (f.canAlwaysEat() || p.canEat(false))) return i;
+            if (f != null && Inv.healingFood(s) && !keptBack(bot, s) && (f.canAlwaysEat() || p.canEat(false))) return i;
         }
         return -1;
+    }
+
+    /**
+     * Among people the pack isn't ours: golden apples wait for an emergency (6 HP or less).
+     * Wandersong ate two of its owner's while healing in bed.
+     */
+    public static boolean keptBack(Bot bot, ItemStack s) {
+        return lol.zym.zymbot.BotConfig.get().humanWorld && Inv.id(s.getItem()).contains("golden_apple") && bot.player().getHealth() > 6;
     }
 
     /** Food level we eat at regardless, wasteful or not: still above sprinting's 6. */
@@ -76,7 +84,7 @@ public class EatTask extends Task {
         for (int i = 0; i < 36; i++) {
             ItemStack s = Inv.inv().getItem(i);
             FoodProperties f = Inv.food(s);
-            if (f == null) continue;
+            if (f == null || keptBack(bot, s)) continue;
             if (Inv.riskyFood(s) && !starving) continue;
             // poison can't kill, but it stops at 1 HP and leaves us to die to the next hit: a starving
             // Bot4 ate a pufferfish at 8 HP and went out hunting at 1. Only what we can take, unless

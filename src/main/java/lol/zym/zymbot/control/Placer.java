@@ -66,6 +66,9 @@ public final class Placer {
     public static boolean place(Item item, BlockPos target) {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer p = mc.player;
+        // nothing placed inside the base's perimeter (the no-break zone): ZymSB, "don't place blocks around base"
+        var bot = lol.zym.zymbot.Bot.get();
+        if (bot != null && bot.inNoBreakZone(target, 0)) return why("not placing inside the base (" + target.toShortString() + ")");
         if (!WorldView.state(target).canBeReplaced()) return why("target " + target.toShortString() + " not replaceable");
         int slot = Inv.find(s -> s.is(item));
         if (slot < 0) return why("no " + Inv.id(item) + " in inventory");

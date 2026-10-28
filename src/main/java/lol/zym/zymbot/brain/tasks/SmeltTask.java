@@ -197,6 +197,7 @@ public class SmeltTask extends Task {
      * that isn't our best of its kind. Keep decides what's spare, as it does for the stash.
      */
     public static int spareWood(Bot bot) {
+        if (BotConfig.get().humanWorld) return -1; // someone else's tables and tools
         for (var pile : lol.zym.zymbot.inv.Keep.surplus(bot)) {
             ItemStack s = Inv.inv().getItem(pile.slot());
             boolean woodenTool = s.getItem() instanceof net.minecraft.world.item.TieredItem t && t.getTier() == net.minecraft.world.item.Tiers.WOOD;

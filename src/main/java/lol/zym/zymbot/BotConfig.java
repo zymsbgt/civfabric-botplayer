@@ -127,6 +127,15 @@ public final class BotConfig {
      */
     public double travelBreakPenalty = 30;
 
+    /**
+     * Playing among people (a real server, often on a lent account): no goals of our own but the
+     * ones that earn class XP (level_*), no board jobs, no wandering when idle, no food swaps or
+     * shopping detours; and the pack isn't ours, so nothing in it is stashed, dropped, burned or
+     * given away unless someone tells us to, and golden apples are kept for emergencies.
+     * ZymSB: "the goal loop should be turned off when interacting in human worlds".
+     */
+    public boolean humanWorld = false;
+
     /** Pillar up and bridge with throwaway blocks while pathing. */
     public boolean placeWhilePathing = true;
 

@@ -371,7 +371,7 @@ public final class Brain {
             return;
         }
 
-        if (!fragile && BotConfig.get().takeBoardJobs && progression.basicsDone()
+        if (!fragile && BotConfig.get().takeBoardJobs && !BotConfig.get().humanWorld && progression.basicsDone()
                 && !claimPending && bot.ticks() >= nextBoardCheck && Inv.freeSlots() > 0) {
             nextBoardCheck = bot.ticks() + 200;
             tryClaim(bot);
@@ -429,6 +429,8 @@ public final class Brain {
         }
 
         pause(bot, Layer.IDLE);
+        // among people, nothing to do is nothing to do: no exploring or catching off on our own
+        if (BotConfig.get().humanWorld) return;
         if (idle == null) {
             if (idleCooldown-- > 0) return;
             idle = makeIdle(bot);
@@ -1029,7 +1031,7 @@ public final class Brain {
             return "sleep";
         // something on the shopping list a few steps away: pick it up on the way. Only between our
         // own goals (never on a job someone gave us), by day, healthy, and not under a blood moon
-        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE)
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && !BotConfig.get().humanWorld
                 && System.currentTimeMillis() > noDetourUntil && bot.ticks() % 40 == 0 && !WorldView.isNight()
                 && !bot.pacifism().bloodMoon() && !bot.health().hurt(bot) && !wet && Inv.freeSlots() > 2) {
             Task doing = active == Layer.PROGRESS ? progress : idle;
@@ -1045,7 +1047,7 @@ public final class Brain {
         // a teammate close by would get more out of some of our food than we would (Spice of Fabric
         // pays little for the tenth loaf, a lot for the first): walk over and hand it across. Between
         // our own goals, by the same rules as a detour, and looked at every 10 s
-        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE)
+        if (reflex == null && (active == Layer.PROGRESS || active == Layer.IDLE) && !BotConfig.get().humanWorld
                 && System.currentTimeMillis() > noShareUntil && bot.ticks() % 200 == 100 && !bot.pacifism().bloodMoon()
                 && !bot.health().hurt(bot) && !wet && !bot.team().inRange().isEmpty()) {
             noShareUntil = System.currentTimeMillis() + 10_000;

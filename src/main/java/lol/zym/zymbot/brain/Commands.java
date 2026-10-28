@@ -59,7 +59,7 @@ public final class Commands {
             "meals (what I could cook from what we have, and what each gains) | dinner [player] (I have food: every hungry bot that hears it comes to me, or that player, to be fed, for 3 minutes)",
             "classes [a b c | role grower|smith|delver|scholar | refresh] | phase (food, farm or level) | standby <job...>|off (the job to go back to between tasks, e.g. standby follow ZymSB) | chests (the chest index) | chests food|share <x> <y> <z> [off] (a player's chest we may eat from, or take anything from) | level [class]",
             "checkchest [player | x y z] (go and look in the chest by whoever asked, or by that player, or at x y z)",
-            "nobreak [radius | off] (break nothing within radius of home: no gathering there, and paths go round)",
+            "nobreak [radius | off] (break and place nothing within radius of home: no gathering or building there, and paths go round)",
             "survey (note the crafting tables and furnaces within 24 blocks and look in every chest there not yet indexed)",
             "landmarks [kind] | mark <name> | goto <mark or kind> (water, wild:onions, ore:iron, village, lootr...) | break x y z | break under [player] | find <block> [radius] (where blocks of a kind are, nearest first)",
             "teamhome | teamhome set <name> [x y z] [purpose] | assign <name> | remove <name>  (leaders only: the team's bases)",

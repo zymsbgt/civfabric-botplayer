@@ -117,6 +117,9 @@ public final class Nav {
     public static void mine(BlockPos pos) {
         mining = true;
         BaritoneAPI.getSettings().allowBreak.value = BotConfig.get().breakWhilePathing;
+        var bot = lol.zym.zymbot.Bot.get();
+        BaritoneAPI.getSettings().allowPlace.value = BotConfig.get().placeWhilePathing
+                && (bot == null || !bot.inNoBreakZone(bot.player().blockPosition(), 0) && !bot.inNoBreakZone(pos, 0));
         breakPenalty(MINING_BREAK_PENALTY);
         baritone().getBuilderProcess().clearArea(pos, pos);
     }
@@ -137,6 +140,9 @@ public final class Nav {
         var bot = lol.zym.zymbot.Bot.get();
         boolean zone = bot != null && (bot.inNoBreakZone(bot.player().blockPosition(), 0) || bot.inNoBreakZone(travelGoal, 0));
         BaritoneAPI.getSettings().allowBreak.value = BotConfig.get().breakWhilePathing && !zone;
+        // nor any blocks placed there (ZymSB: "don't place blocks around base"); both come back as
+        // soon as we're out past the perimeter on a trip that doesn't end inside it
+        BaritoneAPI.getSettings().allowPlace.value = BotConfig.get().placeWhilePathing && !zone;
         breakPenalty(BotConfig.get().travelBreakPenalty);
     }
 
